@@ -1,0 +1,14 @@
+# Dependency directories
+node_modules/
+jspm_packages/
+
+# Production/Build outputs
+dist/
+*.vsix
+
+# Operating System files
+.DS_Store
+Thumbs.db
+
+# Environment variables containing sensitive API keys
+.env

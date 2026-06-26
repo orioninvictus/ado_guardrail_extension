@@ -1,0 +1,80 @@
+{
+    "manifestVersion": 1,
+    "id": "enterprise-secure-by-default-dast",
+    "version": "1.2.29",
+    "name": "Enterprise Automated DAST Engine",
+    "description": "Automated 'Secure-by-Default' DAST Target Provisioning and Scanning Orchestration Engine.",
+    "publisher": "ercumentekim",
+    "targets": [
+        {
+            "id": "Microsoft.VisualStudio.Services"
+        }
+    ],
+    "scopes": [
+        "vso.extension.data",
+        "vso.extension.data_write",
+        "vso.build_execute"
+    ],
+    "categories": [
+        "Azure Pipelines"
+    ],
+    "contributions": [
+        {
+            "id": "dast-admin-configuration-hub",
+            "type": "ms.vss-web.hub",
+            "targets": [
+                "ms.vss-web.collection-admin-hub-group"
+            ],
+            "properties": {
+                "name": "DAST Policy Engine",
+                "uri": "dist/admin-hub/index.html",
+                "iconName": "Shield"
+            }
+        },
+        {
+            "id": "dast-pipeline-decorator",
+            "type": "ms.azure-pipelines.pipeline-decorator",
+            "targets": [
+                "ms.azure-pipelines-agent-job.post-checkout-tasks"
+            ],
+            "properties": {
+                "template": "decorator.yml"
+            }
+        },
+        {
+            "id": "dast-orchestrator-task",
+            "type": "ms.vss-distributed-task.task",
+            "targets": [
+                "ms.vss-distributed-task.tasks"
+            ],
+            "properties": {
+                "name": "dast-orchestrator-task"
+            }
+        },
+        {
+            "id": "dast-build-report-tab",
+            "type": "ms.vss-build-web.build-results-tab",
+            "targets": [
+                "ms.vss-build-web.build-results-view"
+            ],
+            "properties": {
+                "name": "Invicti DAST Scan Report",
+                "uri": "dist/report-tab/index.html"
+            }
+        }
+    ],
+    "files": [
+        {
+            "path": "decorator.yml",
+            "addressable": true
+        },
+        {
+            "path": "dast-orchestrator-task",
+            "addressable": false
+        },
+        {
+            "path": "dist",
+            "addressable": true
+        }
+    ]
+}

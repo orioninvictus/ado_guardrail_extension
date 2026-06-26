@@ -1,0 +1,14 @@
+steps:
+- task: dast-orchestrator-task@1
+  displayName: 'AppSec Guardrail: Automated DAST Engine (Injected)'
+  inputs:
+    SystemAccessToken: '$(System.AccessToken)'
+  condition: |
+    and(
+      succeeded(),
+      or(
+        eq(variables['Environment.Name'], 'Staging'),
+        eq(variables['Release.EnvironmentName'], 'Staging'),
+        startsWith(variables['Build.SourceBranch'], 'refs/tags/')
+      )
+    )
