@@ -1,0 +1,64 @@
+trigger:
+  branches:
+    include:
+      - main
+      - master
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+# Link the Variable Group securely so the runner can inject the masked PAT token
+variables:
+  - group: dast-extension-secrets
+
+stages:
+  - stage: CompileAndPublish
+    displayName: 'AppSec Extension Compilation & Marketplace Deployment'
+    jobs:
+      - job: BuildAndDeploy
+        displayName: 'Automated Extension Assembly'
+        steps:
+          # --- PHASE 1: SYSTEM ENVIRONMENT INITIALIZATION ---
+          - task: NodeTool@0
+            displayName: 'Provision Node.js Environment (v20.x)'
+            inputs:
+              versionSpec: '20.x'
+
+          # --- PHASE 2: ADMIN HUB UI COMPILED ASSEMBLY BUILD ---
+          - script: |
+              echo "==> Packaging React Admin Hub UI..."
+              cd src/admin-hub
+              npm install --legacy-peer-deps
+              npm run build
+            displayName: 'Compile React Admin Hub Dashboard'
+
+          # --- PHASE 3: REPORT RESULTS TAB UI COMPILED ASSEMBLY BUILD ---
+          - script: |
+              echo "==> Packaging React Result Tab UI..."
+              cd src/report-tab
+              npm install --legacy-peer-deps
+              npm run build
+            displayName: 'Compile React Result Tab Iframe UI'
+
+          # --- PHASE 4: VERIFY MANIFEST FILES INTEGRITY ---
+          - script: |
+              echo "==> Verifying artifact folder drops structure..."
+              ls -la dist/admin-hub
+              ls -la dist/report-tab
+              ls -la dast-orchestrator-task
+            displayName: 'Verify Staging Directory Layout'
+
+          # --- PHASE 5: COMPILE AND PACK vsix EXTENSION PACKAGE ---
+          - script: |
+              echo "==> Installing Microsoft TFS Cross-Platform CLI globally..."
+              npm install -g tfx-cli
+              
+              echo "==> Packing distributable VSIX engine..."
+              tfx extension create --manifest-globs vss-extension.json
+            displayName: 'Package Extension Bundle (.vsix)'
+
+          # --- PHASE 6: CD MARKETPLACE CONTINUOUS DEPLOYMENT PUSH ---
+          - script: |
+              echo "==> Pushing updated VSIX bundle straight to the live Marketplace..."
+              tfx extension publish --manifest-globs vss-extension.json --token $(MARKETPLACE_PAT)
+            displayName: 'Publish Extension Live to Marketplace Account'
