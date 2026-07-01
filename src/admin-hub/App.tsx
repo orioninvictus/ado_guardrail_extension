@@ -9,32 +9,35 @@ export default function App() {
     const [projects, setProjects] = React.useState<TeamProjectReference[]>([]);
     const [selectedProjectId, setSelectedProjectId] = React.useState<string>("");
 
-    // Form State 
+    // Form State (Using strings for everything so "" can represent "Inherit")
     const [apiUrl, setApiUrl] = React.useState<string>("");
     const [apiKey, setApiKey] = React.useState<string>("");
     const [scanSpeed, setScanSpeed] = React.useState<string>("");
     const [criticalThreshold, setCriticalThreshold] = React.useState<string>("");
     const [highThreshold, setHighThreshold] = React.useState<string>("");
     const [mediumThreshold, setMediumThreshold] = React.useState<string>("");
-    const [failBuild, setFailBuild] = React.useState<boolean>(true);
-    const [abortScan, setAbortScan] = React.useState<boolean>(false);
+    const [failBuild, setFailBuild] = React.useState<string>("");
+    const [abortScan, setAbortScan] = React.useState<string>("");
     
     // Constraints State
     const [enabledBranches, setEnabledBranches] = React.useState<string>("");
     const [enabledEnvironments, setEnabledEnvironments] = React.useState<string>("");
-    const [strictModeEnabled, setStrictModeEnabled] = React.useState<boolean>(false);
+    const [strictModeEnabled, setStrictModeEnabled] = React.useState<string>("");
+    
+    // Detection Strategy State
     const [detectionMethods, setDetectionMethods] = React.useState<string[]>([]);
     const [overrideDetection, setOverrideDetection] = React.useState<boolean>(false);
 
-    // NEW GUARDRAILS STATE
+    // --- NEW GUARDRAIL STATES ---
     const [allowedDomainRegex, setAllowedDomainRegex] = React.useState<string>("");
-    const [requireAuth, setRequireAuth] = React.useState<boolean>(false);
-    const [restrictApiScans, setRestrictApiScans] = React.useState<boolean>(false);
-    const [tagProject, setTagProject] = React.useState<boolean>(true);
-    const [tagRepo, setTagRepo] = React.useState<boolean>(true);
-    const [tagUser, setTagUser] = React.useState<boolean>(true);
-    const [tagCommit, setTagCommit] = React.useState<boolean>(true);
+    const [requireAuth, setRequireAuth] = React.useState<string>("");
+    const [restrictApiScans, setRestrictApiScans] = React.useState<string>("");
+    const [tagProject, setTagProject] = React.useState<string>("");
+    const [tagRepo, setTagRepo] = React.useState<string>("");
+    const [tagUser, setTagUser] = React.useState<string>("");
+    const [tagCommit, setTagCommit] = React.useState<string>("");
     const [customTags, setCustomTags] = React.useState<string>("");
+    // ----------------------------
     
     const [etag, setEtag] = React.useState<number | undefined>(undefined);
 
@@ -65,22 +68,22 @@ export default function App() {
         setCriticalThreshold(isGlobal ? "1" : "");
         setHighThreshold(isGlobal ? "3" : "");
         setMediumThreshold(isGlobal ? "5" : "");
-        setFailBuild(isGlobal ? true : false);
-        setAbortScan(isGlobal ? false : false);
+        setFailBuild(isGlobal ? "true" : "");
+        setAbortScan(isGlobal ? "false" : "");
         setEnabledBranches(isGlobal ? "refs/heads/main, refs/heads/master, refs/heads/release/*" : "");
         setEnabledEnvironments(isGlobal ? "Staging, UAT" : "");
-        setStrictModeEnabled(isGlobal ? false : false);
+        setStrictModeEnabled(isGlobal ? "false" : "");
         setDetectionMethods(isGlobal ? ["deployment_job", "native_env_object", "pipeline_variable"] : []);
         setOverrideDetection(isGlobal);
-        
+
         // Reset New Guardrails
         setAllowedDomainRegex(isGlobal ? "^https:\\/\\/.*\\.staging\\.company\\.com" : "");
-        setRequireAuth(isGlobal ? false : false);
-        setRestrictApiScans(isGlobal ? false : false);
-        setTagProject(isGlobal ? true : false);
-        setTagRepo(isGlobal ? true : false);
-        setTagUser(isGlobal ? true : false);
-        setTagCommit(isGlobal ? true : false);
+        setRequireAuth(isGlobal ? "false" : "");
+        setRestrictApiScans(isGlobal ? "false" : "");
+        setTagProject(isGlobal ? "true" : "");
+        setTagRepo(isGlobal ? "true" : "");
+        setTagUser(isGlobal ? "true" : "");
+        setTagCommit(isGlobal ? "true" : "");
         setCustomTags("");
 
         setEtag(undefined);
@@ -114,24 +117,24 @@ export default function App() {
                         if (doc.padlocks.critical_threshold !== undefined) setCriticalThreshold(doc.padlocks.critical_threshold);
                         if (doc.padlocks.high_threshold !== undefined) setHighThreshold(doc.padlocks.high_threshold);
                         if (doc.padlocks.medium_threshold !== undefined) setMediumThreshold(doc.padlocks.medium_threshold);
-                        if (doc.padlocks.fail_build_on_findings !== undefined) setFailBuild(doc.padlocks.fail_build_on_findings === "true" || doc.padlocks.fail_build_on_findings === true);
-                        if (doc.padlocks.abort_scan_on_findings !== undefined) setAbortScan(doc.padlocks.abort_scan_on_findings === "true" || doc.padlocks.abort_scan_on_findings === true);
-                        
+                        if (doc.padlocks.fail_build_on_findings !== undefined) setFailBuild(doc.padlocks.fail_build_on_findings);
+                        if (doc.padlocks.abort_scan_on_findings !== undefined) setAbortScan(doc.padlocks.abort_scan_on_findings);
+
                         // Load New Guardrails
                         if (doc.padlocks.allowed_domain_regex !== undefined) setAllowedDomainRegex(doc.padlocks.allowed_domain_regex);
-                        if (doc.padlocks.require_auth !== undefined) setRequireAuth(doc.padlocks.require_auth === "true" || doc.padlocks.require_auth === true);
-                        if (doc.padlocks.restrict_api_scans !== undefined) setRestrictApiScans(doc.padlocks.restrict_api_scans === "true" || doc.padlocks.restrict_api_scans === true);
-                        if (doc.padlocks.tag_project !== undefined) setTagProject(doc.padlocks.tag_project === "true" || doc.padlocks.tag_project === true);
-                        if (doc.padlocks.tag_repo !== undefined) setTagRepo(doc.padlocks.tag_repo === "true" || doc.padlocks.tag_repo === true);
-                        if (doc.padlocks.tag_user !== undefined) setTagUser(doc.padlocks.tag_user === "true" || doc.padlocks.tag_user === true);
-                        if (doc.padlocks.tag_commit !== undefined) setTagCommit(doc.padlocks.tag_commit === "true" || doc.padlocks.tag_commit === true);
+                        if (doc.padlocks.require_auth !== undefined) setRequireAuth(doc.padlocks.require_auth);
+                        if (doc.padlocks.restrict_api_scans !== undefined) setRestrictApiScans(doc.padlocks.restrict_api_scans);
+                        if (doc.padlocks.tag_project !== undefined) setTagProject(doc.padlocks.tag_project);
+                        if (doc.padlocks.tag_repo !== undefined) setTagRepo(doc.padlocks.tag_repo);
+                        if (doc.padlocks.tag_user !== undefined) setTagUser(doc.padlocks.tag_user);
+                        if (doc.padlocks.tag_commit !== undefined) setTagCommit(doc.padlocks.tag_commit);
                         if (doc.padlocks.custom_tags !== undefined) setCustomTags(doc.padlocks.custom_tags);
                     }
 
                     if (doc.injection_constraints) {
                         if (doc.injection_constraints.enabled_branches !== undefined) setEnabledBranches(doc.injection_constraints.enabled_branches.join(", "));
                         if (doc.injection_constraints.enabled_environments !== undefined) setEnabledEnvironments(doc.injection_constraints.enabled_environments.join(", "));
-                        if (doc.injection_constraints.strict_mode_enabled !== undefined) setStrictModeEnabled(doc.injection_constraints.strict_mode_enabled === "true" || doc.injection_constraints.strict_mode_enabled === true);
+                        if (doc.injection_constraints.strict_mode_enabled !== undefined) setStrictModeEnabled(String(doc.injection_constraints.strict_mode_enabled));
                         
                         if (doc.injection_constraints.detection_methods !== undefined) {
                             setDetectionMethods(doc.injection_constraints.detection_methods);
@@ -207,7 +210,7 @@ export default function App() {
                 injection_constraints: cleanObj({
                     enabled_branches: branchArray,
                     enabled_environments: envArray,
-                    strict_mode_enabled: strictModeEnabled,
+                    strict_mode_enabled: strictModeEnabled === "" ? undefined : strictModeEnabled === "true",
                     detection_methods: overrideDetection ? detectionMethods : undefined
                 }),
                 padlocks: cleanObj({
@@ -217,7 +220,7 @@ export default function App() {
                     medium_threshold: mediumThreshold,
                     fail_build_on_findings: failBuild,
                     abort_scan_on_findings: abortScan,
-                    // New Guardrails saved to DB
+                    // New Guardrails Attached
                     allowed_domain_regex: allowedDomainRegex,
                     require_auth: requireAuth,
                     restrict_api_scans: restrictApiScans,
@@ -234,15 +237,10 @@ export default function App() {
 
             console.log(`[Admin Hub] Saving ${isGlobal ? 'Global' : 'Project'} Payload:`, JSON.stringify(policyDocument, null, 2));
 
-            if (etag !== undefined) {
-                policyDocument.__etag = etag;
-            }
+            if (etag !== undefined) policyDocument.__etag = etag;
 
             const savedDoc = await dataManager.setDocument(collection, policyDocument);
-            
-            if (savedDoc && savedDoc.__etag) {
-                setEtag(savedDoc.__etag);
-            }
+            if (savedDoc && savedDoc.__etag) setEtag(savedDoc.__etag);
             
             setStatus(`Success! ${isGlobal ? 'Global policies' : 'Project overrides'} saved.`);
         } catch (err: any) {
@@ -250,6 +248,27 @@ export default function App() {
             setStatus(`Failed to save policies: ${err.message || err.toString()}`);
         }
     };
+
+    const renderSelect = (label: string, value: string, setter: any, options: {val: string, lbl: string}[], desc: string) => (
+        <div style={{ marginBottom: "15px" }}>
+            <label style={{ fontWeight: "600" }}>{label}</label><br/>
+            <select value={value} onChange={e => setter(e.target.value)} style={{ width: "100%", padding: "6px", marginTop: "5px" }}>
+                {activeTab === "project" && <option value="">-- Inherit from Global --</option>}
+                {options.map(o => <option key={o.val} value={o.val}>{o.lbl}</option>)}
+            </select>
+            <p style={{ margin: "4px 0 0 0", fontSize: "12px", color: "#666" }}>{desc}</p>
+        </div>
+    );
+
+    const renderInput = (label: string, value: string, setter: any, placeholder: string, desc: string, inputType: string = "text") => (
+        <div style={{ marginBottom: "15px" }}>
+            <label style={{ fontWeight: "600" }}>{label}</label><br/>
+            <input type={inputType} value={value} onChange={e => setter(e.target.value)} 
+                   placeholder={activeTab === "project" ? "Leave blank to Inherit from Global" : placeholder} 
+                   style={{ width: "100%", padding: "6px", marginTop: "5px" }} />
+            <p style={{ margin: "4px 0 0 0", fontSize: "12px", color: "#666" }}>{desc}</p>
+        </div>
+    );
 
     const isProjectTabActive = activeTab === "project";
     const hideForm = isProjectTabActive && !selectedProjectId;
@@ -285,60 +304,17 @@ export default function App() {
             {!hideForm && (
                 <>
                     <h3>1. Core API Credentials</h3>
-                    <p><em>These credentials will be injected into the pipeline decorator silently.</em></p>
-                    
-                    <div style={{ marginBottom: "15px" }}>
-                        <label style={{ fontWeight: "600" }}>DAST API URL</label><br/>
-                        <input type="text" value={apiUrl} onChange={e => setApiUrl(e.target.value)} placeholder={isProjectTabActive ? "Leave blank to Inherit from Global" : "https://platform.invicti.com"} style={{ width: "100%", padding: "6px", marginTop: "5px" }} />
-                        <p style={{ margin: "4px 0 0 0", fontSize: "12px", color: "#666" }}>
-                            The target base URL endpoint for your corporate vulnerability management tenant platform backend interface.
-                        </p>
-                    </div>
-                    
-                    <div style={{ marginBottom: "15px" }}>
-                        <label style={{ fontWeight: "600" }}>DAST API Key</label><br/>
-                        <input type="password" value={apiKey} onChange={e => setApiKey(e.target.value)} placeholder={isProjectTabActive ? "Leave blank to Inherit from Global" : "Enter API Key"} style={{ width: "100%", padding: "6px", marginTop: "5px" }} />
-                        <p style={{ margin: "4px 0 0 0", fontSize: "12px", color: "#666" }}>
-                            Secret authorization token credentials utilized to authenticate automated background actions. Enforced silently during pipeline run configurations.
-                        </p>
-                    </div>
+                    {renderInput("DAST API URL", apiUrl, setApiUrl, "https://platform.invicti.com", "The target base URL endpoint for your corporate vulnerability management platform.")}
+                    {renderInput("DAST API Key", apiKey, setApiKey, "Enter API Key", "Secret authorization token utilized to authenticate automated background actions.", "password")}
 
                     <h3>2. Pipeline Injection Targets (Gatekeeper Filter)</h3>
-                    <p><em>Define exactly which branches or environment declarations invoke mandatory execution boundaries.</em></p>
-                    
-                    <div style={{ marginBottom: "15px" }}>
-                        <label style={{ fontWeight: "600" }}>Target Git Branches (Comma-separated)</label><br/>
-                        <input
-                            type="text"
-                            value={enabledBranches}
-                            onChange={e => setEnabledBranches(e.target.value)}
-                            placeholder={isProjectTabActive ? "Leave blank to Inherit from Global" : "refs/heads/main, refs/heads/master"}
-                            style={{ width: "100%", padding: "6px", marginTop: "5px" }}
-                        />
-                        <p style={{ margin: "4px 0 0 0", fontSize: "12px", color: "#666" }}>
-                            Specifies the target execution branches. You can utilize wildcards to catch entire structures (e.g., <code>refs/heads/release/*</code> or <code>refs/heads/hotfix/*</code>).
-                        </p>
-                    </div>
-                    
-                    <div style={{ marginBottom: "15px" }}>
-                        <label style={{ fontWeight: "600" }}>Monitored Environments (Comma-separated)</label><br/>
-                        <input
-                            type="text"
-                            value={enabledEnvironments}
-                            onChange={e => setEnabledEnvironments(e.target.value)}
-                            placeholder={isProjectTabActive ? "Leave blank to Inherit from Global" : "Staging, UAT, Production"}
-                            style={{ width: "100%", padding: "6px", marginTop: "5px" }}
-                        />
-                        <p style={{ margin: "4px 0 0 0", fontSize: "12px", color: "#666" }}>
-                            The case-insensitive names of deployment contexts that require DAST coverage checks. Bypasses other pipelines cleanly to save runner time.
-                        </p>
-                    </div>
+                    {renderInput("Target Git Branches (Comma-separated)", enabledBranches, setEnabledBranches, "refs/heads/main, refs/heads/master", "Specifies the target execution branches. Supports wildcards.")}
+                    {renderInput("Monitored Environments (Comma-separated)", enabledEnvironments, setEnabledEnvironments, "Staging, UAT", "Deployment contexts that require DAST coverage checks.")}
 
                     <div style={{ marginBottom: "15px" }}>
                         <label style={{ fontWeight: "600" }}>Environment Metadata Detection Strategy</label>
-                        <p style={{ margin: "4px 0 8px 0", fontSize: "12px", color: "#666" }}>
-                            Configure where the engine checks to discover environmental tracking fields. If multiple areas match, the engine falls through the selected filters sequentially.
-                        </p>
+                        <p style={{ margin: "4px 0 8px 0", fontSize: "12px", color: "#666" }}>Configure where the engine checks to discover environmental tracking fields.</p>
+                        
                         <div style={{ border: "1px solid #ccc", padding: "12px", borderRadius: "4px", backgroundColor: "#fff" }}>
                             {isProjectTabActive && (
                                 <label style={{ display: "block", marginBottom: "15px", color: "#005a9e", fontWeight: "bold", borderBottom: "1px solid #eee", paddingBottom: "10px" }}>
@@ -346,114 +322,75 @@ export default function App() {
                                     Override Global Detection Strategy
                                 </label>
                             )}
+                            
                             <div style={{ opacity: (!isProjectTabActive || overrideDetection) ? 1 : 0.5, pointerEvents: (!isProjectTabActive || overrideDetection) ? "auto" : "none" }}>
-                                <div style={{ marginBottom: "10px" }}>
-                                    <label style={{ cursor: "pointer", fontSize: "14px" }}>
-                                        <input
-                                            type="checkbox"
-                                            checked={detectionMethods.includes("deployment_job")}
-                                            onChange={() => handleToggleMethod("deployment_job")}
-                                            style={{ marginRight: "8px" }}
-                                        />
-                                        <strong>Deployment Job Standard</strong> (Reads <code>ENVIRONMENT_RESOURCE_NAME</code>)
-                                    </label>
-                                    <p style={{ margin: "2px 0 0 22px", fontSize: "11px", color: "#666" }}>
-                                        Evaluates native Azure DevOps deployment job environments automatically. Highly secure, tamper-proof option.
-                                    </p>
-                                </div>
-                                <div style={{ marginBottom: "10px" }}>
-                                    <label style={{ cursor: "pointer", fontSize: "14px" }}>
-                                        <input
-                                            type="checkbox"
-                                            checked={detectionMethods.includes("native_env_object")}
-                                            onChange={() => handleToggleMethod("native_env_object")}
-                                            style={{ marginRight: "8px" }}
-                                        />
-                                        <strong>Resource/Environment Object</strong> (Reads <code>ENVIRONMENT_NAME</code>)
-                                    </label>
-                                    <p style={{ margin: "2px 0 0 22px", fontSize: "11px", color: "#666" }}>
-                                        Intercepts standard contextual parameters declared inside native platform infrastructure blocks.
-                                    </p>
-                                </div>
-                                <div>
-                                    <label style={{ cursor: "pointer", fontSize: "14px" }}>
-                                        <input
-                                            type="checkbox"
-                                            checked={detectionMethods.includes("pipeline_variable")}
-                                            onChange={() => handleToggleMethod("pipeline_variable")}
-                                            style={{ marginRight: "8px" }}
-                                        />
-                                        <strong>Manual Pipeline Variable</strong> (Reads <code>Environment.Name</code> / <code>ENVIRONMENT.NAME</code>)
-                                    </label>
-                                    <p style={{ margin: "2px 0 0 22px", fontSize: "11px", color: "#666" }}>
-                                        Fallback strategy supporting traditional, manually declared custom YAML pipeline string variable structures.
-                                    </p>
-                                </div>
+                                {["deployment_job", "native_env_object", "pipeline_variable"].map(method => (
+                                    <div key={method} style={{ marginBottom: "8px" }}>
+                                        <label style={{ cursor: "pointer", fontSize: "14px" }}>
+                                            <input type="checkbox" checked={detectionMethods.includes(method)} onChange={() => handleToggleMethod(method)} style={{ marginRight: "8px" }} />
+                                            <strong>{method.replace(/_/g, ' ').toUpperCase()}</strong>
+                                        </label>
+                                    </div>
+                                ))}
                             </div>
                         </div>
                     </div>
 
-                    <div style={{ marginBottom: "15px", backgroundColor: "#f4f4f4", padding: "10px", borderRadius: "4px" }}>
-                        <label style={{ cursor: "pointer" }}>
-                            <input
-                                type="checkbox"
-                                checked={strictModeEnabled}
-                                onChange={e => setStrictModeEnabled(e.target.checked)}
-                                style={{ marginRight: "8px" }}
-                            />
-                            <strong>Enforce Strict Context Mode (Fail-Secure Gate)</strong>
-                        </label>
-                        <p style={{ margin: "5px 0 0 22px", fontSize: "12px", color: "#555" }}>
-                            When checked, any build pipeline failing to supply environment labels via selected strategies will be **instantly failed** to eliminate unmonitored blind spots.
-                        </p>
-                    </div>
+                    {renderSelect("Enforce Strict Context Mode (Fail-Secure Gate)", strictModeEnabled, setStrictModeEnabled, 
+                        [{val: "true", lbl: "Enabled (Break builds missing environments)"}, {val: "false", lbl: "Disabled (Scan regardless)"}], 
+                        "When enabled, pipelines failing to supply environment labels are instantly failed.")}
 
-                    {/* NEW SECTION: Advanced Security Guardrails */}
                     <h3>3. Advanced Domain & Context Guardrails</h3>
-                    <p><em>Enforce restrictions on target locations, authentication presence, and API definitions.</em></p>
+                    {renderInput("Allowed Target Domain Scope (RegEx)", allowedDomainRegex, setAllowedDomainRegex, "^https:\\/\\/.*\\.staging\\.company\\.com", "Prevents scanning of unauthorized or production endpoints. Evaluated against target.url.")}
+                    
+                    {renderSelect("Mandatory Authentication Enforcement", requireAuth, setRequireAuth, 
+                        [{val: "true", lbl: "True (Block Unauthenticated Scans)"}, {val: "false", lbl: "False (Allow Unauthenticated Scans)"}], 
+                        "If True, breaks the build if developers fail to supply valid authentication blocks in their .dast-config.yml.")}
+                    
+                    {renderSelect("API Specification Lockdown", restrictApiScans, setRestrictApiScans, 
+                        [{val: "true", lbl: "True (Restrict to Uploaded Specs)"}, {val: "false", lbl: "False (Allow Standard Crawling)"}], 
+                        "When Target Type is 'api', this forces 'restrict_scans_to_import_files' to true, isolating the scanner to explicit swagger paths only.")}
 
-                    <div style={{ marginBottom: "15px", padding: "15px", border: "1px solid #ddd", borderRadius: "5px", backgroundColor: "#fafafa" }}>
-                        <label style={{ fontWeight: "600" }}>Allowed Target Domain Scope (JavaScript RegEx)</label><br/>
-                        <input 
-                            type="text" 
-                            value={allowedDomainRegex} 
-                            onChange={e => setAllowedDomainRegex(e.target.value)} 
-                            placeholder={isProjectTabActive ? "Leave blank to Inherit from Global" : "^https:\\/\\/.*\\.staging\\.company\\.com"} 
-                            style={{ width: "100%", padding: "8px", marginTop: "5px", fontFamily: "monospace" }} 
-                        />
-                        <div style={{ margin: "8px 0 0 0", fontSize: "12px", color: "#444" }}>
-                            <strong>Prevents scanning of unauthorized or production endpoints.</strong> Evaluated against the developer's <code>target.url</code>.
-                            <ul style={{ margin: "4px 0", paddingLeft: "20px" }}>
-                                <li><code>^https:\/\/.*\.staging\.company\.com</code> (Allows any subdomain under staging)</li>
-                                <li><code>^https:\/\/(api-test|dev)\.company\.com</code> (Allows specific subdomains)</li>
-                            </ul>
-                        </div>
+                    <h3>4. Automated Pipeline Tagging</h3>
+                    <p style={{ margin: "4px 0 8px 0", fontSize: "12px", color: "#666" }}>Select which Azure DevOps runtime context variables should be automatically appended to targets and scans.</p>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "15px" }}>
+                        {renderSelect("Tag ADO Project", tagProject, setTagProject, [{val: "true", lbl: "Inject Tag"}, {val: "false", lbl: "Do Not Inject"}], "")}
+                        {renderSelect("Tag ADO Repository", tagRepo, setTagRepo, [{val: "true", lbl: "Inject Tag"}, {val: "false", lbl: "Do Not Inject"}], "")}
+                        {renderSelect("Tag ADO Build User", tagUser, setTagUser, [{val: "true", lbl: "Inject Tag"}, {val: "false", lbl: "Do Not Inject"}], "")}
+                        {renderSelect("Tag ADO Commit SHA", tagCommit, setTagCommit, [{val: "true", lbl: "Inject Tag"}, {val: "false", lbl: "Do Not Inject"}], "")}
+                    </div>
+                    {renderInput("Custom Organizational Tags (Comma-separated)", customTags, setCustomTags, "Billing:SecOps, Audit:2026-Q3", "Static tags applied to all assets under this policy scope.")}
+
+                    <h3>5. Padlocked Developer Guardrails</h3>
+                    
+                    {renderSelect("Enforced Scan Speed", scanSpeed, setScanSpeed, 
+                        [
+                            {val: "slow", lbl: "Slow (Thorough)"}, 
+                            {val: "moderate", lbl: "Moderate"}, 
+                            {val: "fast", lbl: "Fast"},
+                            {val: "sequential", lbl: "Sequential"}
+                        ], 
+                        "Hardlocks the execution performance metrics. Prevents developers from forcing throttling speeds.")}
+
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "10px", marginBottom: "15px" }}>
+                        {renderInput("Critical Ceiling", criticalThreshold, setCriticalThreshold, "1", "", "number")}
+                        {renderInput("High Ceiling", highThreshold, setHighThreshold, "3", "", "number")}
+                        {renderInput("Medium Ceiling", mediumThreshold, setMediumThreshold, "5", "", "number")}
                     </div>
 
-                    <div style={{ marginBottom: "15px" }}>
-                        <label style={{ cursor: "pointer" }}>
-                            <input type="checkbox" checked={requireAuth} onChange={e => setRequireAuth(e.target.checked)} style={{ marginRight: "6px" }} />
-                            <strong>Mandatory Authentication Enforcement</strong>
-                        </label>
-                        <p style={{ margin: "4px 0 0 20px", fontSize: "12px", color: "#666" }}>
-                            If enabled, the orchestrator breaks the build if developers fail to supply valid authentication blocks in their <code>.dast-config.yml</code> (Prevents "shallow" scans).
-                        </p>
-                    </div>
+                    {renderSelect("Fail Pipeline Build on Threshold Breach", failBuild, setFailBuild, 
+                        [{val: "true", lbl: "True (Break Pipeline)"}, {val: "false", lbl: "False (Warn Only)"}], 
+                        "Automatically breaks the runner lifecycle state to block risky deployments.")}
 
-                    <div style={{ marginBottom: "15px" }}>
-                        <label style={{ cursor: "pointer" }}>
-                            <input type="checkbox" checked={restrictApiScans} onChange={e => setRestrictApiScans(e.target.checked)} style={{ marginRight: "6px" }} />
-                            <strong>API Specification Lockdown</strong>
-                        </label>
-                        <p style={{ margin: "4px 0 0 20px", fontSize: "12px", color: "#666" }}>
-                            When Target Type is set to <code>api</code>, this overrides Invicti configurations, forcing the crawler to stay strictly within the paths defined in the uploaded OpenAPI/Swagger file.
-                        </p>
-                    </div>
+                    {renderSelect("Abort Scan Immediately on Threshold Breach", abortScan, setAbortScan, 
+                        [{val: "true", lbl: "True (Terminate Active Scan)"}, {val: "false", lbl: "False (Let Scan Finish)"}], 
+                        "Actively terminate running scanners the moment compliance limits are broken to save engine compute hours.")}
 
-                    <div style={{ marginBottom: "15px", padding: "15px", border: "1px solid #ccc", borderRadius: "4px" }}>
-                        <label style={{ fontWeight: "600" }}>Automated Organizational Tagging</label>
-                        <p style={{ margin: "4px 0 8px 0", fontSize: "12px", color: "#666" }}>
-                            Select which Azure DevOps runtime context variables should be automatically appended to targets and scans for compliance tracking and billing.
-                        </p>
-                        <div style={{ display: "flex", gap: "15px", marginBottom: "10px" }}>
-                            <label
+                    <button onClick={handleSave} style={{ backgroundColor: "#005a9e", color: "white", padding: "10px 20px", border: "none", cursor: "pointer", marginTop: "15px", fontWeight: "600", borderRadius: "4px" }}>
+                        Save {activeTab === "global" ? "Global Baseline" : "Project Overrides"}
+                    </button>
+                </>
+            )}
+        </div>
+    );
+}
