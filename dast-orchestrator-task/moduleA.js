@@ -2,8 +2,9 @@ const https = require('https');
 const url = require('url');
 
 /**
- * Module A: Resolves or provisions the target using your proven legacy schema.
- * Directly leverages server-side name filtering for idempotent asset mapping.
+ * Module A: Asset Inventory & Guardrail Gatekeeper
+ * Resolves or provisions the target using the proven legacy schema, while 
+ * enforcing organizational compliance guardrails and dynamic ADO telemetry.
  */
 function executeModuleA(devConfig, activePolicy) {
     return new Promise((resolve, reject) => {
@@ -11,20 +12,94 @@ function executeModuleA(devConfig, activePolicy) {
 
         const baseApiUrl = (activePolicy.apiUrl || "https://platform.invicti.com").replace(/\/$/, "");
         const apiKey = activePolicy.apiKey;
+        const padlocks = activePolicy.padlocks || {};
         
         const targetUrl = devConfig["target.url"];
         const targetName = devConfig["target.name"] || `AzureDevOps-${Date.now()}`;
+        
+        // Dynamically parse target type (defaults to 'web' if not specified)
+        const targetType = (devConfig["target.type"] || "web").toLowerCase();
 
+        if (!targetUrl) {
+            return reject(new Error("AppSec Gatekeeper Error: Developer configuration is missing the mandatory 'target.url' property."));
+        }
+
+        // =====================================================================
+        // 🛡️ GUARDRAIL 1: DOMAIN SCOPE (URL Allowed-Lists)
+        // =====================================================================
+        if (padlocks.allowed_domain_regex) {
+            console.log(`[Module A] Validating target URL against corporate domain scope regex...`);
+            const domainRegex = new RegExp(padlocks.allowed_domain_regex, 'i'); // Case-insensitive
+            
+            if (!domainRegex.test(targetUrl)) {
+                const errorMsg = `SECURITY GATE BREACHED: Target URL (${targetUrl}) violates organizational allowed domain scope policy (${padlocks.allowed_domain_regex}).`;
+                console.error(`##vso[task.logissue type=error;]${errorMsg}`);
+                return reject(new Error(errorMsg));
+            }
+            console.log(`[✔] Domain scope validated.`);
+        }
+
+        // =====================================================================
+        // 🛡️ GUARDRAIL 2: MANDATORY AUTHENTICATION ENFORCEMENT
+        // =====================================================================
+        if (padlocks.require_auth === "true" || padlocks.require_auth === true) {
+            console.log(`[Module A] Validating mandatory authentication declarations...`);
+            const hasAuth = devConfig["target.username"] || devConfig["target.auth_token"] || devConfig["target.bearer_token"] || devConfig["target.oauth_endpoint"];
+            
+            if (!hasAuth) {
+                const errorMsg = "SECURITY GATE BREACHED: AppSec Policy Violation - Unauthenticated (shallow) scans are not permitted. Please supply authentication parameters in your .dast-config.yml.";
+                console.error(`##vso[task.logissue type=error;]${errorMsg}`);
+                return reject(new Error(errorMsg));
+            }
+            console.log(`[✔] Authentication parameters detected.`);
+        }
+
+        // =====================================================================
+        // 🏷️ AUTOMATED ORGANIZATIONAL TAGGING
+        // =====================================================================
+        console.log(`[Module A] Resolving Azure DevOps telemetry tags...`);
+        let generatedTags = [];
+        
+        if (padlocks.tag_project === "true" || padlocks.tag_project === true) {
+            if (process.env['SYSTEM_TEAMPROJECT']) generatedTags.push(`ADO_Project:${process.env['SYSTEM_TEAMPROJECT']}`);
+        }
+        if (padlocks.tag_repo === "true" || padlocks.tag_repo === true) {
+            if (process.env['BUILD_REPOSITORY_NAME']) generatedTags.push(`ADO_Repo:${process.env['BUILD_REPOSITORY_NAME']}`);
+        }
+        if (padlocks.tag_user === "true" || padlocks.tag_user === true) {
+            if (process.env['BUILD_REQUESTEDFOR']) generatedTags.push(`ADO_User:${process.env['BUILD_REQUESTEDFOR']}`);
+        }
+        if (padlocks.tag_commit === "true" || padlocks.tag_commit === true) {
+            if (process.env['BUILD_SOURCEVERSION']) generatedTags.push(`ADO_Commit:${process.env['BUILD_SOURCEVERSION'].substring(0, 8)}`);
+        }
+        
+        if (padlocks.custom_tags) {
+            const cTags = padlocks.custom_tags.split(',').map(t => t.trim()).filter(Boolean);
+            generatedTags = generatedTags.concat(cTags);
+        }
+
+        if (devConfig["target.tags"]) {
+            const dTags = devConfig["target.tags"].split(',').map(t => t.trim()).filter(Boolean);
+            generatedTags = generatedTags.concat(dTags);
+        }
+
+        generatedTags = [...new Set(generatedTags)];
+        console.log(`[Module A] Metadata tags generated: ${generatedTags.join(', ')}`);
+
+        // =====================================================================
+        // 📦 LEGACY ASSET REGISTRY & MAPPING
+        // =====================================================================
         // Exact working legacy JSON payload structure matching AssetCreateRequest spec
         const payload = {
             name: targetName,
             businessImpact: 'low',
             description: 'DAST created from Automated DevSecOps Governance Engine',
+            tags: generatedTags,
             assetType: 'target',
             assetDetail: {
                 assetType: 'target',
                 url: targetUrl,
-                targetType: 'web',
+                targetType: targetType, // Dynamically maps to 'web' or 'api'
                 isEphemeral: false
             }
         };
