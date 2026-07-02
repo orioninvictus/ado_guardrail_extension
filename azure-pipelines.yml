@@ -30,6 +30,9 @@ stages:
               cd src/admin-hub
               npm install --legacy-peer-deps
               npm run build
+              
+              echo "==> Generating Admin Hub index.html..."
+              echo "<!DOCTYPE html><html lang='en'><head><meta charset='UTF-8'></head><body style='margin:0;padding:0;background-color:white;'><div id='root'></div><script src='index.js'></script></body></html>" > ../../dist/admin-hub/index.html
             displayName: 'Compile React Admin Hub Dashboard'
 
           # --- PHASE 3: REPORT RESULTS TAB UI COMPILED ASSEMBLY BUILD ---
@@ -38,6 +41,9 @@ stages:
               cd src/report-tab
               npm install --legacy-peer-deps
               npm run build
+              
+              echo "==> Generating Report Tab index.html..."
+              echo "<!DOCTYPE html><html lang='en'><head><meta charset='UTF-8'></head><body style='margin:0;padding:0;background-color:white;'><div id='root'></div><script src='index.js'></script></body></html>" > ../../dist/report-tab/index.html
             displayName: 'Compile React Result Tab Iframe UI'
 
           # --- PHASE 4: VERIFY MANIFEST FILES INTEGRITY ---
