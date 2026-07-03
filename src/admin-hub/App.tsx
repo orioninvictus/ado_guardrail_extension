@@ -23,6 +23,7 @@ const T = {
     surface500: "#a5a8ab",
     surface600: "#84878a",
     surface700: "#636569",
+    surface800: "#3a3f45",
     surface900: "#101721",
     accent50: "#f3f2fd",
     accent100: "#ece9fa",
