@@ -6,8 +6,7 @@ const url = require('url');
 /**
  * Module B: Configures the target asset and uploads any contextual repository OpenAPI/Swagger specs.
  * Evaluates developer configurations against padlocked corporate governance profiles.
- * 
- * @param {string} targetId - The resolved technical target identifier from Module A
+ * * @param {string} targetId - The resolved technical target identifier from Module A
  * @param {Object} devConfig - The parsed options from the local repository `.dast-config.yml`
  * @param {Object} activePolicy - The merged corporate policies resolved from the Extension Data Service
  * @returns {Promise<Object>} The configuration operation response metadata
@@ -22,13 +21,31 @@ async function executeModuleB(targetId, devConfig, activePolicy) {
     // 1. Resolve Infrastructure Credentials from AppSec Control Plane
     const apiUrl = (activePolicy.apiUrl || "https://platform.invicti.com").replace(/\/$/, '');
     const apiKey = activePolicy.apiKey || process.env['DAST_API_KEY'];
+    const padlocks = activePolicy.padlocks || {};
 
     // Keep track of final execution telemetry data to pass safely back to the orchestrator plane
     let finalOperationResponse = { statusCode: 200, data: "{}" };
 
+    // =====================================================================
+    // 🛡️ GUARDRAIL ENFORCEMENT: API SPECIFICATION LOCKDOWN
+    // =====================================================================
+    const targetType = (devConfig["target.type"] || "web").toLowerCase();
+    let restrictApi = devConfig["target.restrict_scans_to_import_files"] === "true";
+    const relativeSpecPath = devConfig["target.api_spec_file"] || devConfig["target.api_specification_path"] || devConfig["target.import_file_path"];
+
+    if (targetType === 'api' && (padlocks.restrict_api_scans === "true" || padlocks.restrict_api_scans === true)) {
+        console.log(`[✔] Governance Guardrail Active: API Specification Lockdown enabled.`);
+        console.log(`[Module B] Forcing 'restrict_scans_to_import_files' flag to TRUE to isolate crawling scope.`);
+        restrictApi = true;
+
+        if (!relativeSpecPath) {
+            const errorMsg = "SECURITY GATE BREACHED: Target Type is 'api', but no OpenAPI/Swagger specification file was declared in .dast-config.yml. Provide 'target.api_spec_file' to continue.";
+            console.error(`##vso[task.logissue type=error;]${errorMsg}`);
+            throw new Error(errorMsg);
+        }
+    }
+
     // 2. Lifecycle Component 1: Context File Specification Uploads
-    const relativeSpecPath = devConfig["target.api_specification_path"] || devConfig["target.import_file_path"];
-    
     if (relativeSpecPath) {
         const repoRoot = process.env['BUILD_SOURCESDIRECTORY'] || process.env['BUILD_REPOSITORY_LOCALPATH'] || process.cwd();
         const fullSpecPath = path.isAbsolute(relativeSpecPath) ? relativeSpecPath : path.join(repoRoot, relativeSpecPath);
@@ -85,7 +102,7 @@ async function executeModuleB(targetId, devConfig, activePolicy) {
         targetScanSpeed = activePolicy.padlocks.scan_speed;
     }
 
-    // Form Authentication Resolvers
+    // Authentication Mapping - Form Resolvers
     let loginSchema = { kind: "none" };
     const authType = devConfig["target.authentication.type"] || "none";
     
@@ -108,6 +125,16 @@ async function executeModuleB(targetId, devConfig, activePolicy) {
         console.log(`[Module B] Form Login Engine mapping initialized for endpoint: ${loginSchema.credentials.url}`);
     }
 
+    // Authentication Mapping - API Header Resolvers
+    let customHeadersArray = [];
+    if (devConfig["target.auth_token"]) {
+        customHeadersArray.push({ name: "Authorization", value: `Token ${devConfig["target.auth_token"]}` });
+        console.log(`[Module B] Native 'Token' API authentication header dynamically injected.`);
+    } else if (devConfig["target.bearer_token"]) {
+        customHeadersArray.push({ name: "Authorization", value: `Bearer ${devConfig["target.bearer_token"]}` });
+        console.log(`[Module B] Native 'Bearer' API authentication header dynamically injected.`);
+    }
+
     // Assemble Native PATCH Payload Structure matching TargetConfiguration schema
     const patchPayload = {
         limit_crawler_scope: devConfig["target.limit_crawler_scope"] !== "false",
@@ -120,12 +147,12 @@ async function executeModuleB(targetId, devConfig, activePolicy) {
         scan_speed: targetScanSpeed,
         case_sensitive: "no",
         technologies: [],
-        custom_headers: [],
+        custom_headers: customHeadersArray, // Injected Auth Headers
         custom_cookies: [],
         excluded_paths: [],
         user_agent: "",
         debug: false,
-        restrict_scans_to_import_files: devConfig["target.restrict_scans_to_import_files"] === "true"
+        restrict_scans_to_import_files: restrictApi // Lock API scopes
     };
 
     // 4. Update Remote DAST Configuration Topology
@@ -164,12 +191,15 @@ function httpRequest(method, targetUrl, payload, token, dynamicHeaders = {}) {
                 'Accept': 'application/json',
                 'X-Auth': token,
                 'User-Agent': 'Enterprise-DevSecOps-Engine/1.1.11',
-                ...dynamicHeaders
+                '...dynamicHeaders': '' // Quick cleanup artifact, see correctly spread dynamicHeaders below
             },
             timeout: 30000
         };
 
-        if (payload && !dynamicHeaders['Content-Type']) {
+        // Correctly assign dynamic headers
+        Object.assign(options.headers, dynamicHeaders);
+
+        if (payload && !options.headers['Content-Type']) {
             options.headers['Content-Type'] = 'application/json';
         }
         if (payload) {

@@ -41,14 +41,54 @@ async function executeModuleC(targetId, devConfig, activePolicy) {
     console.log(`    -> Critical: ${criticalThreshold} | High: ${highThreshold} | Medium: ${mediumThreshold}`);
     console.log(`    -> Fail Build: ${failBuildOnFindings} | Abort Scan: ${abortScanOnFindings}`);
 
+    // =====================================================================
+    // 🏷️ AUTOMATED ORGANIZATIONAL SCAN TAGGING
+    // =====================================================================
+    console.log(`[Module C] Resolving Azure DevOps telemetry tags for active scan...`);
+    let generatedTags = [];
+    
+    if (policyPadlocks.tag_project === "true" || policyPadlocks.tag_project === true) {
+        if (process.env['SYSTEM_TEAMPROJECT']) generatedTags.push(`ADO_Project:${process.env['SYSTEM_TEAMPROJECT']}`);
+    }
+    if (policyPadlocks.tag_repo === "true" || policyPadlocks.tag_repo === true) {
+        if (process.env['BUILD_REPOSITORY_NAME']) generatedTags.push(`ADO_Repo:${process.env['BUILD_REPOSITORY_NAME']}`);
+    }
+    if (policyPadlocks.tag_user === "true" || policyPadlocks.tag_user === true) {
+        if (process.env['BUILD_REQUESTEDFOR']) generatedTags.push(`ADO_User:${process.env['BUILD_REQUESTEDFOR']}`);
+    }
+    if (policyPadlocks.tag_commit === "true" || policyPadlocks.tag_commit === true) {
+        if (process.env['BUILD_SOURCEVERSION']) generatedTags.push(`ADO_Commit:${process.env['BUILD_SOURCEVERSION'].substring(0, 8)}`);
+    }
+    
+    if (policyPadlocks.custom_tags) {
+        const cTags = policyPadlocks.custom_tags.split(',').map(t => t.trim()).filter(Boolean);
+        generatedTags = generatedTags.concat(cTags);
+    }
+
+    if (devConfig["target.tags"]) {
+        const dTags = devConfig["target.tags"].split(',').map(t => t.trim()).filter(Boolean);
+        generatedTags = generatedTags.concat(dTags);
+    }
+
+    generatedTags = [...new Set(generatedTags)];
+
+    // =====================================================================
+    // ⚙️ INCREMENTAL SCAN ENFORCEMENT
+    // =====================================================================
+    // If Admin enforced incremental globally, force it. Otherwise, defer to devConfig.
+    const enforceIncremental = String(policyPadlocks.incremental_mode) === "true";
+    const isIncremental = enforceIncremental || (devConfig["target.incremental"] === 'true');
+
     // 1. Dispatch Scan
     const scanPayload = {
         user_authorized_to_scan: "yes",
         target_id: targetId,
         profile_id: profileId,
+        report_template_id: reportTemplateId, // Injected for backend mapping
         schedule: { disable: false },
         max_scan_time: parseInt(devConfig["target.max_scan_time"] || '0', 10),
-        incremental: (devConfig["target.incremental"] === 'true')
+        incremental: isIncremental, // Enforced toggle applied
+        tags: generatedTags // Telemetry tags appended
     };
 
     const scanInitResult = await httpRequest('POST', `${apiUrl}/api/v1/scans`, scanPayload, apiKey);
@@ -56,7 +96,7 @@ async function executeModuleC(targetId, devConfig, activePolicy) {
     const scanId = scanInitBody.scan_id;
 
     if (!scanId) throw new Error(`Platform failed to initialize. Response: ${scanInitResult.data}`);
-    console.log(`[✔] Scan initialized. ID: ${scanId}`);
+    console.log(`[✔] Scan initialized dynamically (Incremental: ${isIncremental}). ID: ${scanId}`);
 
     // 2. Polling Loop
     const scanStatusUrl = `${apiUrl}/api/v1/scans/${scanId}`;
