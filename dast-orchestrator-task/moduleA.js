@@ -3,8 +3,8 @@ const url = require('url');
 
 /**
  * Module A: Asset Inventory & Guardrail Gatekeeper
- * Resolves or provisions the target using the proven legacy schema, while 
- * enforcing organizational compliance guardrails and dynamic ADO telemetry.
+ * Resolves or provisions the target, enforcing organizational compliance guardrails,
+ * dynamic target support, and administrative target name overrides.
  */
 function executeModuleA(devConfig, activePolicy) {
     return new Promise((resolve, reject) => {
@@ -13,12 +13,60 @@ function executeModuleA(devConfig, activePolicy) {
         const baseApiUrl = (activePolicy.apiUrl || "https://platform.invicti.com").replace(/\/$/, "");
         const apiKey = activePolicy.apiKey;
         const padlocks = activePolicy.padlocks || {};
-        
+
         const targetUrl = devConfig["target.url"];
-        const targetName = devConfig["target.name"] || `AzureDevOps-${Date.now()}`;
-        
+
         // Dynamically parse target type (defaults to 'web' if not specified)
         const targetType = (devConfig["target.type"] || "web").toLowerCase();
+
+        // =====================================================================
+        // 🏷️ TARGET NAME CONSTRUCTION
+        // Admin name override takes full control when enabled.
+        // =====================================================================
+        let targetName = devConfig["target.name"] || `AzureDevOps-${Date.now()}`;
+
+        if (padlocks.target_name_override === "true" || padlocks.target_name_override === true) {
+            const parts = [];
+
+            // 1. Optional static prefix
+            if (padlocks.target_name_prefix && padlocks.target_name_prefix.trim()) {
+                parts.push(padlocks.target_name_prefix.trim());
+            }
+
+            // 2. ADO Project Name
+            if ((padlocks.target_name_include_project === "true" || padlocks.target_name_include_project === true)
+                && process.env['SYSTEM_TEAMPROJECT']) {
+                parts.push(process.env['SYSTEM_TEAMPROJECT']);
+            }
+
+            // 3. ADO Build Requester (User)
+            if ((padlocks.target_name_include_user === "true" || padlocks.target_name_include_user === true)
+                && process.env['BUILD_REQUESTEDFOR']) {
+                parts.push(process.env['BUILD_REQUESTEDFOR']);
+            }
+
+            // 4. Developer-declared target name from dast-config.yml
+            if ((padlocks.target_name_include_dev_name === "true" || padlocks.target_name_include_dev_name === true)
+                && devConfig["target.name"]) {
+                parts.push(devConfig["target.name"]);
+            }
+
+            if (parts.length > 0) {
+                targetName = parts.join(' | ');
+                console.log(`[Module A] Admin target name override applied: "${targetName}"`);
+            } else {
+                console.log(`[Module A] Target name override enabled but no components selected — using developer name.`);
+            }
+        }
+
+        // =====================================================================
+        // ⚡ DYNAMIC TARGET FLAG
+        // When target.dynamic=true the asset is ephemeral — no persistent history.
+        // =====================================================================
+        const isDynamic = devConfig["target.dynamic"] === "true";
+        if (isDynamic) {
+            console.log(`[Module A] Dynamic (ephemeral) target mode activated for this run.`);
+        }
 
         if (!targetUrl) {
             return reject(new Error("AppSec Gatekeeper Error: Developer configuration is missing the mandatory 'target.url' property."));
@@ -29,8 +77,8 @@ function executeModuleA(devConfig, activePolicy) {
         // =====================================================================
         if (padlocks.allowed_domain_regex) {
             console.log(`[Module A] Validating target URL against corporate domain scope regex...`);
-            const domainRegex = new RegExp(padlocks.allowed_domain_regex, 'i'); // Case-insensitive
-            
+            const domainRegex = new RegExp(padlocks.allowed_domain_regex, 'i');
+
             if (!domainRegex.test(targetUrl)) {
                 const errorMsg = `SECURITY GATE BREACHED: Target URL (${targetUrl}) violates organizational allowed domain scope policy (${padlocks.allowed_domain_regex}).`;
                 console.error(`##vso[task.logissue type=error;]${errorMsg}`);
@@ -45,7 +93,7 @@ function executeModuleA(devConfig, activePolicy) {
         if (padlocks.require_auth === "true" || padlocks.require_auth === true) {
             console.log(`[Module A] Validating mandatory authentication declarations...`);
             const hasAuth = devConfig["target.username"] || devConfig["target.auth_token"] || devConfig["target.bearer_token"] || devConfig["target.oauth_endpoint"];
-            
+
             if (!hasAuth) {
                 const errorMsg = "SECURITY GATE BREACHED: AppSec Policy Violation - Unauthenticated (shallow) scans are not permitted. Please supply authentication parameters in your .dast-config.yml.";
                 console.error(`##vso[task.logissue type=error;]${errorMsg}`);
@@ -59,7 +107,7 @@ function executeModuleA(devConfig, activePolicy) {
         // =====================================================================
         console.log(`[Module A] Resolving Azure DevOps telemetry tags...`);
         let generatedTags = [];
-        
+
         if (padlocks.tag_project === "true" || padlocks.tag_project === true) {
             if (process.env['SYSTEM_TEAMPROJECT']) generatedTags.push(`ADO_Project:${process.env['SYSTEM_TEAMPROJECT']}`);
         }
@@ -72,7 +120,7 @@ function executeModuleA(devConfig, activePolicy) {
         if (padlocks.tag_commit === "true" || padlocks.tag_commit === true) {
             if (process.env['BUILD_SOURCEVERSION']) generatedTags.push(`ADO_Commit:${process.env['BUILD_SOURCEVERSION'].substring(0, 8)}`);
         }
-        
+
         if (padlocks.custom_tags) {
             const cTags = padlocks.custom_tags.split(',').map(t => t.trim()).filter(Boolean);
             generatedTags = generatedTags.concat(cTags);
@@ -84,12 +132,12 @@ function executeModuleA(devConfig, activePolicy) {
         }
 
         generatedTags = [...new Set(generatedTags)];
-        console.log(`[Module A] Metadata tags generated: ${generatedTags.join(', ')}`);
+        console.log(`[Module A] Metadata tags generated: ${generatedTags.length > 0 ? generatedTags.join(', ') : '(none)'}`);
 
         // =====================================================================
-        // 📦 LEGACY ASSET REGISTRY & MAPPING
+        // 📦 ASSET REGISTRY PAYLOAD
+        // isEphemeral=true for dynamic targets — no persistent scan history stored.
         // =====================================================================
-        // Exact working legacy JSON payload structure matching AssetCreateRequest spec
         const payload = {
             name: targetName,
             businessImpact: 'low',
@@ -99,8 +147,8 @@ function executeModuleA(devConfig, activePolicy) {
             assetDetail: {
                 assetType: 'target',
                 url: targetUrl,
-                targetType: targetType, // Dynamically maps to 'web' or 'api'
-                isEphemeral: false
+                targetType: targetType,
+                isEphemeral: isDynamic  // ← Dynamic target flag
             }
         };
 
@@ -125,7 +173,7 @@ function executeModuleA(devConfig, activePolicy) {
             res.on('data', (chunk) => { body += chunk; });
             res.on('end', () => {
                 console.log(`[Module A] Create Asset Response Status: ${res.statusCode}`);
-                
+
                 if (res.statusCode >= 200 && res.statusCode < 300) {
                     const locationHeader = res.headers['location'] || res.headers['Location'];
                     if (!locationHeader) {
@@ -140,14 +188,13 @@ function executeModuleA(devConfig, activePolicy) {
                         .catch(err => reject(err));
 
                 } else if (res.statusCode === 400 && (body.includes("AssetNameExistInOrganizationException") || body.includes("already exist"))) {
-                    // IDEMPOTENCY ROUTE: Intercept unique name duplicate conflicts
                     console.log(`[Module A] Conflict Detected: Asset Name "${targetName}" already claimed inside this organization.`);
                     console.log(`[Module A] Executing targeted server-side name query...`);
-                    
+
                     lookupAssetByInventoryName(baseApiUrl, apiKey, targetName)
                         .then(targetId => resolve(targetId))
                         .catch(err => reject(err));
-                        
+
                 } else {
                     reject(new Error(`API request failed with code ${res.statusCode}: ${body}`));
                 }
@@ -166,7 +213,7 @@ function executeModuleA(devConfig, activePolicy) {
 function fetchTargetOriginId(baseApiUrl, apiKey, assetId) {
     return new Promise((resolve, reject) => {
         const targetEndpoint = url.parse(`${baseApiUrl}/api/inventory/v1/assets/${assetId}`);
-        
+
         const options = {
             hostname: targetEndpoint.hostname,
             path: targetEndpoint.path,
@@ -202,7 +249,7 @@ function fetchTargetOriginId(baseApiUrl, apiKey, assetId) {
 
 /**
  * Server-Side Filtered Resolution Engine
- * Executes GET /api/inventory/v1/assets?name={targetName}&pageSize=50&pageNumber=1 exactly like your working curl test.
+ * Executes GET /api/inventory/v1/assets?name={targetName}&pageSize=50&pageNumber=1
  */
 function lookupAssetByInventoryName(baseApiUrl, apiKey, targetName) {
     return new Promise((resolve, reject) => {
@@ -229,8 +276,7 @@ function lookupAssetByInventoryName(baseApiUrl, apiKey, targetName) {
                     try {
                         const responsePayload = JSON.parse(body);
                         const assetItems = responsePayload.items || [];
-                        
-                        // Strict validation match against the items array
+
                         const matchedRecord = assetItems.find(item => item && item.name === targetName);
 
                         if (matchedRecord) {
