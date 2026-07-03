@@ -92,7 +92,9 @@ function executeModuleA(devConfig, activePolicy) {
         // =====================================================================
         if (padlocks.require_auth === "true" || padlocks.require_auth === true) {
             console.log(`[Module A] Validating mandatory authentication declarations...`);
-            const hasAuth = devConfig["target.username"] || devConfig["target.auth_token"] || devConfig["target.bearer_token"] || devConfig["target.oauth_endpoint"];
+            const hasAuth = devConfig["target.username"] || devConfig["target.auth_token"] || devConfig["target.bearer_token"] || devConfig["target.oauth_endpoint"] ||
+                            devConfig["target.authentication.username"] || devConfig["target.authentication.password"] ||
+                            (devConfig["target.authentication.type"] && devConfig["target.authentication.type"] !== "none");
 
             if (!hasAuth) {
                 const errorMsg = "SECURITY GATE BREACHED: AppSec Policy Violation - Unauthenticated (shallow) scans are not permitted. Please supply authentication parameters in your .dast-config.yml.";
