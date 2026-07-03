@@ -1,5 +1,5 @@
 steps:
-- task: dast-orchestrator-task@1
+- task: dast-orchestrator-task@2
   displayName: 'AppSec Guardrail: Automated DAST Engine (Injected)'
   inputs:
     SystemAccessToken: '$(System.AccessToken)'
