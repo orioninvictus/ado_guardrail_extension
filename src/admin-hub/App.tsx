@@ -75,6 +75,110 @@ const PROJECT_DEFAULTS: Defaults = {
 type SectionKey = "connection" | "trigger" | "guardrails" | "thresholds" | "tagging" | "compliance";
 const SECTION_ORDER: SectionKey[] = ["connection", "trigger", "guardrails", "thresholds", "tagging", "compliance"];
 
+type FieldState = "normal" | "inherited" | "overridden";
+const fieldStateOf = (isProjectTabActive: boolean, value: string): FieldState => {
+    if (!isProjectTabActive) return "normal";
+    return value ? "overridden" : "inherited";
+};
+
+// ---- Shared styles (module-level: pure functions of state, safe to reuse across renders) ----
+const rowWrapperStyle = (state: FieldState): React.CSSProperties => ({
+    display: "flex", alignItems: "flex-start", gap: 16, padding: "16px 20px",
+    borderBottom: `1px solid ${T.surface200}`,
+    background: state === "overridden" ? "#faf9ff" : T.surface0,
+});
+const inputBoxStyle = (state: FieldState): React.CSSProperties => {
+    const base: React.CSSProperties = {
+        width: "100%", boxSizing: "border-box", padding: "8px 12px", borderRadius: 6,
+        fontFamily: T.font, fontSize: 14, height: 36,
+    };
+    if (state === "overridden") return { ...base, border: `1px solid ${T.surface400}`, borderLeft: `3px solid ${T.accent800}`, background: "#faf9ff", color: T.surface900, fontWeight: 500 };
+    if (state === "inherited") return { ...base, border: `1px solid ${T.surface200}`, background: T.surface50, color: T.surface900, fontStyle: "italic" };
+    return { ...base, border: `1px solid ${T.surface400}`, background: T.surface0, color: T.surface900 };
+};
+const labelStyle: React.CSSProperties = { fontSize: 14, fontWeight: 600, color: T.surface900 };
+const descStyle: React.CSSProperties = { margin: 0, fontSize: 12, color: T.surface700, lineHeight: 1.5 };
+const badgeStyle: React.CSSProperties = { background: T.accent100, color: T.accent800, fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 9999 };
+const noteStyle = (state: FieldState): React.CSSProperties => ({
+    margin: "4px 0 0", fontSize: 12,
+    color: state === "overridden" ? T.accent800 : T.surface500,
+    fontWeight: state === "overridden" ? 500 : 400,
+});
+
+// ---- Reusable field components (module-level so identity is stable across App re-renders —
+// defining these inside App() would remount inputs on every keystroke and eat focus) ----
+
+function TextField(props: {
+    label: string; value: string; setter: (v: string) => void; placeholder: string;
+    desc?: string; type?: string; hint?: string; isProjectTabActive: boolean; min?: number;
+}) {
+    const state = fieldStateOf(props.isProjectTabActive, props.value);
+    const isNumber = props.type === "number";
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        let v = e.target.value;
+        if (isNumber && v !== "" && v !== "-") {
+            const n = Number(v);
+            if (!Number.isNaN(n) && n < 0) v = "0";
+        }
+        props.setter(v);
+    };
+    return (
+        <div style={rowWrapperStyle(state)}>
+            <div style={{ width: 280, flexShrink: 0, paddingRight: 24 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                    <label style={labelStyle}>{props.label}</label>
+                    {state === "overridden" && <span style={badgeStyle}>Custom</span>}
+                </div>
+                {props.desc && <p style={descStyle}>{props.desc}</p>}
+                {state === "inherited" && <p style={noteStyle(state)}>Inherited from global{props.hint ? ` — ${props.hint}` : ""}</p>}
+                {state === "overridden" && <p style={noteStyle(state)}>Set at project level</p>}
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+                <input type={props.type || "text"} value={props.value} onChange={handleChange}
+                       min={isNumber ? (props.min ?? 0) : undefined}
+                       placeholder={props.isProjectTabActive ? "Inherit from global" : props.placeholder}
+                       style={inputBoxStyle(state)} />
+            </div>
+        </div>
+    );
+}
+
+function SelectField(props: {
+    label: string; value: string; setter: (v: string) => void; options: { val: string; lbl: string }[];
+    desc?: string; isProjectTabActive: boolean;
+}) {
+    const state = fieldStateOf(props.isProjectTabActive, props.value);
+    return (
+        <div style={rowWrapperStyle(state)}>
+            <div style={{ width: 280, flexShrink: 0, paddingRight: 24 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                    <label style={labelStyle}>{props.label}</label>
+                    {state === "overridden" && <span style={badgeStyle}>Custom</span>}
+                </div>
+                {props.desc && <p style={descStyle}>{props.desc}</p>}
+                {state === "inherited" && <p style={noteStyle(state)}>Inherited from global</p>}
+                {state === "overridden" && <p style={noteStyle(state)}>Set at project level</p>}
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+                <select value={props.value} onChange={e => props.setter(e.target.value)} style={inputBoxStyle(state)}>
+                    {props.isProjectTabActive && <option value="">— Inherit from global —</option>}
+                    {props.options.map(o => <option key={o.val} value={o.val}>{o.lbl}</option>)}
+                </select>
+            </div>
+        </div>
+    );
+}
+
+function SectionHeader(props: { title: string; collapsed: boolean; onToggle: () => void }) {
+    return (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4, cursor: "pointer" }}
+             onClick={props.onToggle}>
+            <h6 style={{ margin: 0, fontFamily: T.font, fontWeight: 500, fontSize: 18, color: T.surface900 }}>{props.title}</h6>
+            <span style={{ color: T.surface600, fontSize: 14 }}>{props.collapsed ? "⌄" : "⌃"}</span>
+        </div>
+    );
+}
+
 export default function App() {
     const [status, setStatus] = React.useState<string>("Initializing SDK...");
     const [activeTab, setActiveTab] = React.useState<"global" | "project">("global");
@@ -322,15 +426,14 @@ export default function App() {
         else if (selectedProjectId) loadPolicy("project", selectedProjectId);
     };
 
+    // Clamp threshold fields so they can never go negative, even via the number spinner.
+    const clampedSetCritical = (v: string) => setCriticalThreshold(v === "" || v === "-" ? v : String(Math.max(0, Number(v))));
+    const clampedSetHigh = (v: string) => setHighThreshold(v === "" || v === "-" ? v : String(Math.max(0, Number(v))));
+    const clampedSetMedium = (v: string) => setMediumThreshold(v === "" || v === "-" ? v : String(Math.max(0, Number(v))));
+
     // ---- Derived state ----
     const isProjectTabActive = activeTab === "project";
     const hideForm = isProjectTabActive && !selectedProjectId;
-
-    type FieldState = "normal" | "inherited" | "overridden";
-    const fieldState = (value: string): FieldState => {
-        if (!isProjectTabActive) return "normal";
-        return value ? "overridden" : "inherited";
-    };
 
     const buildNamePreview = () => {
         if (targetNameOverride !== "true") return null;
@@ -352,83 +455,6 @@ export default function App() {
             setCollapsed(next);
         }
     };
-
-    // ---- Styles ----
-    const rowWrapperStyle = (state: FieldState): React.CSSProperties => ({
-        display: "flex", alignItems: "flex-start", gap: 16, padding: "16px 20px",
-        borderBottom: `1px solid ${T.surface200}`,
-        background: state === "overridden" ? "#faf9ff" : T.surface0,
-    });
-    const inputBoxStyle = (state: FieldState): React.CSSProperties => {
-        const base: React.CSSProperties = {
-            width: "100%", boxSizing: "border-box", padding: "8px 12px", borderRadius: 6,
-            fontFamily: T.font, fontSize: 14, height: 36,
-        };
-        if (state === "overridden") return { ...base, border: `1px solid ${T.surface400}`, borderLeft: `3px solid ${T.accent800}`, background: "#faf9ff", color: T.surface900, fontWeight: 500 };
-        if (state === "inherited") return { ...base, border: `1px solid ${T.surface200}`, background: T.surface50, color: T.surface900, fontStyle: "italic" };
-        return { ...base, border: `1px solid ${T.surface400}`, background: T.surface0, color: T.surface900 };
-    };
-    const labelStyle: React.CSSProperties = { fontSize: 14, fontWeight: 600, color: T.surface900 };
-    const descStyle: React.CSSProperties = { margin: 0, fontSize: 12, color: T.surface700, lineHeight: 1.5 };
-    const badgeStyle: React.CSSProperties = { background: T.accent100, color: T.accent800, fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 9999 };
-    const noteStyle = (state: FieldState): React.CSSProperties => ({
-        margin: "4px 0 0", fontSize: 12,
-        color: state === "overridden" ? T.accent800 : T.surface500,
-        fontWeight: state === "overridden" ? 500 : 400,
-    });
-
-    const TextField = (props: { label: string; value: string; setter: (v: string) => void; placeholder: string; desc?: string; type?: string; hint?: string; }) => {
-        const state = fieldState(props.value);
-        return (
-            <div style={rowWrapperStyle(state)}>
-                <div style={{ width: 280, flexShrink: 0, paddingRight: 24 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-                        <label style={labelStyle}>{props.label}</label>
-                        {state === "overridden" && <span style={badgeStyle}>Custom</span>}
-                    </div>
-                    {props.desc && <p style={descStyle}>{props.desc}</p>}
-                    {state === "inherited" && <p style={noteStyle(state)}>Inherited from global{props.hint ? ` — ${props.hint}` : ""}</p>}
-                    {state === "overridden" && <p style={noteStyle(state)}>Set at project level</p>}
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                    <input type={props.type || "text"} value={props.value} onChange={e => props.setter(e.target.value)}
-                           placeholder={isProjectTabActive ? "Inherit from global" : props.placeholder}
-                           style={inputBoxStyle(state)} />
-                </div>
-            </div>
-        );
-    };
-
-    const SelectField = (props: { label: string; value: string; setter: (v: string) => void; options: { val: string; lbl: string }[]; desc?: string; }) => {
-        const state = fieldState(props.value);
-        return (
-            <div style={rowWrapperStyle(state)}>
-                <div style={{ width: 280, flexShrink: 0, paddingRight: 24 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-                        <label style={labelStyle}>{props.label}</label>
-                        {state === "overridden" && <span style={badgeStyle}>Custom</span>}
-                    </div>
-                    {props.desc && <p style={descStyle}>{props.desc}</p>}
-                    {state === "inherited" && <p style={noteStyle(state)}>Inherited from global</p>}
-                    {state === "overridden" && <p style={noteStyle(state)}>Set at project level</p>}
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                    <select value={props.value} onChange={e => props.setter(e.target.value)} style={inputBoxStyle(state)}>
-                        {isProjectTabActive && <option value="">— Inherit from global —</option>}
-                        {props.options.map(o => <option key={o.val} value={o.val}>{o.lbl}</option>)}
-                    </select>
-                </div>
-            </div>
-        );
-    };
-
-    const SectionHeader = (props: { title: string; sectionKey: SectionKey }) => (
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4, cursor: "pointer" }}
-             onClick={() => toggleSection(props.sectionKey)}>
-            <h6 style={{ margin: 0, fontFamily: T.font, fontWeight: 500, fontSize: 18, color: T.surface900 }}>{props.title}</h6>
-            <span style={{ color: T.surface600, fontSize: 14 }}>{collapsed[props.sectionKey] ? "⌄" : "⌃"}</span>
-        </div>
-    );
 
     const statusIsError = /fail/i.test(status);
     const statusIsSuccess = /success/i.test(status);
@@ -508,26 +534,26 @@ export default function App() {
                 <>
                     {/* Connection */}
                     <div style={{ marginBottom: 28 }}>
-                        <SectionHeader title="Connection" sectionKey="connection" />
+                        <SectionHeader title="Connection" collapsed={!!collapsed.connection} onToggle={() => toggleSection("connection")} />
                         {!collapsed.connection && (
                             <div style={{ border: `1px solid ${T.surface200}`, borderRadius: 8, overflow: "hidden" }}>
                                 <TextField label="DAST API URL" value={apiUrl} setter={setApiUrl} placeholder="https://platform.invicti.com"
-                                           desc="Base URL for your corporate vulnerability management platform." hint={globalSnapshot.apiUrl} />
+                                           desc="Base URL for your corporate vulnerability management platform." hint={globalSnapshot.apiUrl} isProjectTabActive={isProjectTabActive} />
                                 <TextField label="DAST API key" value={apiKey} setter={setApiKey} placeholder="Enter API key" type="password"
-                                           desc="Secret token for authenticated background actions." hint="inherits the global API key" />
+                                           desc="Secret token for authenticated background actions." hint="inherits the global API key" isProjectTabActive={isProjectTabActive} />
                             </div>
                         )}
                     </div>
 
                     {/* Scan Trigger Conditions */}
                     <div style={{ marginBottom: 28 }}>
-                        <SectionHeader title="Scan Trigger Conditions" sectionKey="trigger" />
+                        <SectionHeader title="Scan Trigger Conditions" collapsed={!!collapsed.trigger} onToggle={() => toggleSection("trigger")} />
                         {!collapsed.trigger && (
                             <div style={{ border: `1px solid ${T.surface200}`, borderRadius: 8, overflow: "hidden" }}>
                                 <TextField label="Target git branches" value={enabledBranches} setter={setEnabledBranches} placeholder="refs/heads/main, refs/heads/master"
-                                           desc="Supports wildcards, e.g. refs/heads/release/*" hint={globalSnapshot.enabledBranches} />
+                                           desc="Supports wildcards, e.g. refs/heads/release/*" hint={globalSnapshot.enabledBranches} isProjectTabActive={isProjectTabActive} />
                                 <TextField label="Monitored environments" value={enabledEnvironments} setter={setEnabledEnvironments} placeholder="Staging, UAT"
-                                           desc="Deployment contexts that require DAST coverage." hint={globalSnapshot.enabledEnvironments} />
+                                           desc="Deployment contexts that require DAST coverage." hint={globalSnapshot.enabledEnvironments} isProjectTabActive={isProjectTabActive} />
 
                                 <div style={rowWrapperStyle("normal")}>
                                     <div style={{ width: 280, flexShrink: 0, paddingRight: 24 }}>
@@ -554,68 +580,68 @@ export default function App() {
 
                                 <SelectField label="Strict context mode" value={strictModeEnabled} setter={setStrictModeEnabled}
                                              options={[{ val: "true", lbl: "Enabled — break builds missing environments" }, { val: "false", lbl: "Disabled — scan regardless" }]}
-                                             desc="Fail-secure gate for missing environment metadata." />
+                                             desc="Fail-secure gate for missing environment metadata." isProjectTabActive={isProjectTabActive} />
                             </div>
                         )}
                     </div>
 
                     {/* Domain & Auth Guardrails */}
                     <div style={{ marginBottom: 28 }}>
-                        <SectionHeader title="Domain & Auth Guardrails" sectionKey="guardrails" />
+                        <SectionHeader title="Domain & Auth Guardrails" collapsed={!!collapsed.guardrails} onToggle={() => toggleSection("guardrails")} />
                         {!collapsed.guardrails && (
                             <div style={{ border: `1px solid ${T.surface200}`, borderRadius: 8, overflow: "hidden" }}>
                                 <TextField label="Allowed domain scope (RegEx)" value={allowedDomainRegex} setter={setAllowedDomainRegex}
                                            placeholder="^https:\/\/.*\.staging\.company\.com"
-                                           desc="Prevents scanning of unauthorized or production endpoints." hint={globalSnapshot.allowedDomainRegex} />
+                                           desc="Prevents scanning of unauthorized or production endpoints." hint={globalSnapshot.allowedDomainRegex} isProjectTabActive={isProjectTabActive} />
                                 <SelectField label="Mandatory authentication" value={requireAuth} setter={setRequireAuth}
                                              options={[{ val: "true", lbl: "Enabled — block unauthenticated scans" }, { val: "false", lbl: "Disabled — allow unauthenticated scans" }]}
-                                             desc="Breaks the build if devs fail to supply auth config." />
+                                             desc="Breaks the build if devs fail to supply auth config." isProjectTabActive={isProjectTabActive} />
                                 <SelectField label="API specification lockdown" value={restrictApiScans} setter={setRestrictApiScans}
                                              options={[{ val: "true", lbl: "Enabled — restrict to uploaded specs" }, { val: "false", lbl: "Disabled — allow standard crawling" }]}
-                                             desc="Restricts API-type targets to uploaded specs only." />
+                                             desc="Restricts API-type targets to uploaded specs only." isProjectTabActive={isProjectTabActive} />
                             </div>
                         )}
                     </div>
 
                     {/* Risk Thresholds & Enforcement */}
                     <div style={{ marginBottom: 28 }}>
-                        <SectionHeader title="Risk Thresholds & Enforcement" sectionKey="thresholds" />
+                        <SectionHeader title="Risk Thresholds & Enforcement" collapsed={!!collapsed.thresholds} onToggle={() => toggleSection("thresholds")} />
                         {!collapsed.thresholds && (
                             <div style={{ border: `1px solid ${T.surface200}`, borderRadius: 8, overflow: "hidden" }}>
                                 <SelectField label="Enforced scan speed" value={scanSpeed} setter={setScanSpeed}
                                              options={[{ val: "slow", lbl: "Slow — thorough" }, { val: "moderate", lbl: "Moderate" }, { val: "fast", lbl: "Fast" }, { val: "sequential", lbl: "Sequential" }]}
-                                             desc="Hardlocks execution speed; prevents dev throttling bypass." />
-                                <TextField label="Critical ceiling" value={criticalThreshold} setter={setCriticalThreshold} placeholder="1" type="number" hint={globalSnapshot.criticalThreshold} />
-                                <TextField label="High ceiling" value={highThreshold} setter={setHighThreshold} placeholder="3" type="number" hint={globalSnapshot.highThreshold} />
-                                <TextField label="Medium ceiling" value={mediumThreshold} setter={setMediumThreshold} placeholder="5" type="number" hint={globalSnapshot.mediumThreshold} />
+                                             desc="Hardlocks execution speed; prevents dev throttling bypass." isProjectTabActive={isProjectTabActive} />
+                                <TextField label="Critical ceiling" value={criticalThreshold} setter={clampedSetCritical} placeholder="1" type="number" min={0} hint={globalSnapshot.criticalThreshold} isProjectTabActive={isProjectTabActive} />
+                                <TextField label="High ceiling" value={highThreshold} setter={clampedSetHigh} placeholder="3" type="number" min={0} hint={globalSnapshot.highThreshold} isProjectTabActive={isProjectTabActive} />
+                                <TextField label="Medium ceiling" value={mediumThreshold} setter={clampedSetMedium} placeholder="5" type="number" min={0} hint={globalSnapshot.mediumThreshold} isProjectTabActive={isProjectTabActive} />
                                 <SelectField label="Fail build on threshold breach" value={failBuild} setter={setFailBuild}
                                              options={[{ val: "true", lbl: "Enabled — break pipeline" }, { val: "false", lbl: "Disabled — warn only" }]}
-                                             desc="Blocks risky deployments automatically." />
+                                             desc="Blocks risky deployments automatically." isProjectTabActive={isProjectTabActive} />
                                 <SelectField label="Abort scan on threshold breach" value={abortScan} setter={setAbortScan}
                                              options={[{ val: "true", lbl: "Enabled — terminate active scan" }, { val: "false", lbl: "Disabled — let scan finish" }]}
-                                             desc="Terminates active scanners the moment limits are broken." />
+                                             desc="Terminates active scanners the moment limits are broken." isProjectTabActive={isProjectTabActive} />
                             </div>
                         )}
                     </div>
 
                     {/* Tagging & Naming */}
                     <div style={{ marginBottom: 28 }}>
-                        <SectionHeader title="Tagging & Naming" sectionKey="tagging" />
+                        <SectionHeader title="Tagging & Naming" collapsed={!!collapsed.tagging} onToggle={() => toggleSection("tagging")} />
                         {!collapsed.tagging && (
                             <div style={{ border: `1px solid ${T.surface200}`, borderRadius: 8, overflow: "hidden" }}>
                                 <SelectField label="Tag ADO project" value={tagProject} setter={setTagProject}
-                                             options={[{ val: "true", lbl: "Inject tag" }, { val: "false", lbl: "Do not inject" }]} />
+                                             options={[{ val: "true", lbl: "Inject tag" }, { val: "false", lbl: "Do not inject" }]} isProjectTabActive={isProjectTabActive} />
                                 <SelectField label="Tag ADO repository" value={tagRepo} setter={setTagRepo}
-                                             options={[{ val: "true", lbl: "Inject tag" }, { val: "false", lbl: "Do not inject" }]} />
+                                             options={[{ val: "true", lbl: "Inject tag" }, { val: "false", lbl: "Do not inject" }]} isProjectTabActive={isProjectTabActive} />
                                 <SelectField label="Tag ADO build user" value={tagUser} setter={setTagUser}
-                                             options={[{ val: "true", lbl: "Inject tag" }, { val: "false", lbl: "Do not inject" }]} />
+                                             options={[{ val: "true", lbl: "Inject tag" }, { val: "false", lbl: "Do not inject" }]} isProjectTabActive={isProjectTabActive} />
                                 <SelectField label="Tag ADO commit SHA" value={tagCommit} setter={setTagCommit}
-                                             options={[{ val: "true", lbl: "Inject tag" }, { val: "false", lbl: "Do not inject" }]} />
+                                             options={[{ val: "true", lbl: "Inject tag" }, { val: "false", lbl: "Do not inject" }]} isProjectTabActive={isProjectTabActive} />
                                 <TextField label="Custom organizational tags" value={customTags} setter={setCustomTags} placeholder="Billing:SecOps, Audit:2026-Q3"
-                                           desc="Static tags applied to all assets under this scope." hint={globalSnapshot.customTags || "(none)"} />
+                                           desc="Static tags applied to all assets under this scope." hint={globalSnapshot.customTags || "(none)"} isProjectTabActive={isProjectTabActive} />
                                 <SelectField label="Target name override" value={targetNameOverride} setter={setTargetNameOverride}
                                              options={[{ val: "true", lbl: "Enabled — admin controls naming" }, { val: "false", lbl: "Disabled — developer controls naming" }]}
-                                             desc="When enabled, admins control target naming instead of dast-config.yml." />
+                                             desc="When enabled, admins control target naming instead of dast-config.yml." isProjectTabActive={isProjectTabActive} />
 
                                 {targetNameOverride === "true" && (
                                     <div style={{ padding: "18px 20px", borderTop: `1px solid ${T.surface200}`, background: "#faf9ff" }}>
@@ -662,7 +688,7 @@ export default function App() {
 
                     {/* Compliance Tracking */}
                     <div style={{ marginBottom: 8 }}>
-                        <SectionHeader title="Compliance Tracking" sectionKey="compliance" />
+                        <SectionHeader title="Compliance Tracking" collapsed={!!collapsed.compliance} onToggle={() => toggleSection("compliance")} />
                         {!collapsed.compliance && (
                             <div style={{ border: `1px solid ${T.surface200}`, borderRadius: 8, padding: "16px 20px" }}>
                                 <p style={{ margin: "0 0 10px", fontSize: 12, color: T.surface700 }}>Active frameworks annotate every scan event with control references in the pipeline log.</p>
