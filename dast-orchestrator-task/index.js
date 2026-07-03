@@ -283,7 +283,10 @@ function parseYamlLight(yamlText) {
         if (sep === -1) continue;
 
         const key = clean.substring(0, sep).trim();
-        const val = clean.substring(sep + 1).trim().replace(/^["']|["']$/g, '');
+        const rawVal = clean.substring(sep + 1).trim();
+        // If value is quoted, extract content between quotes (ignores trailing inline comments)
+        const quotedMatch = rawVal.match(/^(['"])(.*?)\1/);
+        const val = quotedMatch ? quotedMatch[2] : rawVal.replace(/\s+#.*$/, '').trim();
         const parent = stack.length > 0 ? stack[stack.length - 1].path : '';
         const currentPath = parent ? `${parent}.${key}` : key;
 
