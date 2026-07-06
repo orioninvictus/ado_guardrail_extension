@@ -49,6 +49,7 @@ type Defaults = {
     tagProject: string; tagRepo: string; tagUser: string; tagCommit: string; customTags: string;
     complianceFrameworks: string[];
     targetNameOverride: string; targetNamePrefix: string; targetNameIncludeProject: string; targetNameIncludeUser: string; targetNameIncludeDevName: string;
+    profileId: string; incrementalMode: string;
 };
 
 const GLOBAL_DEFAULTS: Defaults = {
@@ -60,6 +61,7 @@ const GLOBAL_DEFAULTS: Defaults = {
     tagProject: "true", tagRepo: "true", tagUser: "true", tagCommit: "true", customTags: "",
     complianceFrameworks: [],
     targetNameOverride: "false", targetNamePrefix: "", targetNameIncludeProject: "true", targetNameIncludeUser: "false", targetNameIncludeDevName: "true",
+    profileId: "11111111-1111-1111-1111-111111111111", incrementalMode: "false",
 };
 
 const PROJECT_DEFAULTS: Defaults = {
@@ -70,6 +72,7 @@ const PROJECT_DEFAULTS: Defaults = {
     tagProject: "", tagRepo: "", tagUser: "", tagCommit: "", customTags: "",
     complianceFrameworks: [],
     targetNameOverride: "", targetNamePrefix: "", targetNameIncludeProject: "", targetNameIncludeUser: "", targetNameIncludeDevName: "",
+    profileId: "", incrementalMode: "",
 };
 
 type SectionKey = "connection" | "trigger" | "guardrails" | "thresholds" | "tagging" | "compliance";
@@ -217,6 +220,8 @@ export default function App() {
     const [targetNameIncludeProject, setTargetNameIncludeProject] = React.useState<string>(GLOBAL_DEFAULTS.targetNameIncludeProject);
     const [targetNameIncludeUser, setTargetNameIncludeUser] = React.useState<string>(GLOBAL_DEFAULTS.targetNameIncludeUser);
     const [targetNameIncludeDevName, setTargetNameIncludeDevName] = React.useState<string>(GLOBAL_DEFAULTS.targetNameIncludeDevName);
+    const [profileId, setProfileId] = React.useState<string>(GLOBAL_DEFAULTS.profileId);
+    const [incrementalMode, setIncrementalMode] = React.useState<string>(GLOBAL_DEFAULTS.incrementalMode);
 
     const [etag, setEtag] = React.useState<number | undefined>(undefined);
 
@@ -251,6 +256,7 @@ export default function App() {
         setComplianceFrameworks(d.complianceFrameworks);
         setTargetNameOverride(d.targetNameOverride); setTargetNamePrefix(d.targetNamePrefix);
         setTargetNameIncludeProject(d.targetNameIncludeProject); setTargetNameIncludeUser(d.targetNameIncludeUser); setTargetNameIncludeDevName(d.targetNameIncludeDevName);
+        setProfileId(d.profileId); setIncrementalMode(d.incrementalMode);
         setEtag(undefined);
     };
 
@@ -300,6 +306,8 @@ export default function App() {
                         if (doc.padlocks.target_name_include_project !== undefined) { setTargetNameIncludeProject(doc.padlocks.target_name_include_project); resolved.targetNameIncludeProject = doc.padlocks.target_name_include_project; }
                         if (doc.padlocks.target_name_include_user !== undefined) { setTargetNameIncludeUser(doc.padlocks.target_name_include_user); resolved.targetNameIncludeUser = doc.padlocks.target_name_include_user; }
                         if (doc.padlocks.target_name_include_dev_name !== undefined) { setTargetNameIncludeDevName(doc.padlocks.target_name_include_dev_name); resolved.targetNameIncludeDevName = doc.padlocks.target_name_include_dev_name; }
+                        if (doc.padlocks.profile_id !== undefined) { setProfileId(doc.padlocks.profile_id); resolved.profileId = doc.padlocks.profile_id; }
+                        if (doc.padlocks.incremental_mode !== undefined) { setIncrementalMode(doc.padlocks.incremental_mode); resolved.incrementalMode = doc.padlocks.incremental_mode; }
                     }
 
                     if (doc.injection_constraints) {
@@ -400,7 +408,9 @@ export default function App() {
                     target_name_prefix: targetNamePrefix,
                     target_name_include_project: targetNameIncludeProject,
                     target_name_include_user: targetNameIncludeUser,
-                    target_name_include_dev_name: targetNameIncludeDevName
+                    target_name_include_dev_name: targetNameIncludeDevName,
+                    profile_id: profileId,
+                    incremental_mode: incrementalMode
                 })
             };
 
@@ -611,6 +621,13 @@ export default function App() {
                                 <SelectField label="Enforced scan speed" value={scanSpeed} setter={setScanSpeed}
                                              options={[{ val: "slow", lbl: "Slow — thorough" }, { val: "moderate", lbl: "Moderate" }, { val: "fast", lbl: "Fast" }, { val: "sequential", lbl: "Sequential" }]}
                                              desc="Hardlocks execution speed; prevents dev throttling bypass." isProjectTabActive={isProjectTabActive} />
+                                <TextField label="Scan profile ID" value={profileId} setter={setProfileId}
+                                           placeholder="11111111-1111-1111-1111-111111111111"
+                                           desc="Invicti scan profile UUID. Defaults to Full Scan (all-ones UUID). Copy the profile ID from your Invicti platform under Scans → Profiles."
+                                           hint={globalSnapshot.profileId} isProjectTabActive={isProjectTabActive} />
+                                <SelectField label="Incremental scan mode" value={incrementalMode} setter={setIncrementalMode}
+                                             options={[{ val: "true", lbl: "Enabled — scan only changed areas" }, { val: "false", lbl: "Disabled — full scan every time" }]}
+                                             desc="When enabled, Invicti re-tests only areas that changed since the last scan. Faster pipelines, but requires a prior scan baseline to exist for the target." isProjectTabActive={isProjectTabActive} />
                                 <TextField label="Critical ceiling" value={criticalThreshold} setter={clampedSetCritical} placeholder="1" type="number" min={0} hint={globalSnapshot.criticalThreshold} isProjectTabActive={isProjectTabActive} />
                                 <TextField label="High ceiling" value={highThreshold} setter={clampedSetHigh} placeholder="3" type="number" min={0} hint={globalSnapshot.highThreshold} isProjectTabActive={isProjectTabActive} />
                                 <TextField label="Medium ceiling" value={mediumThreshold} setter={clampedSetMedium} placeholder="5" type="number" min={0} hint={globalSnapshot.mediumThreshold} isProjectTabActive={isProjectTabActive} />
