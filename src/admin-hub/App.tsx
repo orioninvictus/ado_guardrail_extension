@@ -188,7 +188,7 @@ export default function App() {
     const [projects, setProjects] = React.useState<TeamProjectReference[]>([]);
     const [selectedProjectId, setSelectedProjectId] = React.useState<string>("");
     const [collapsed, setCollapsed] = React.useState<Record<string, boolean>>({});
-    const [lockedMinHeight, setLockedMinHeight] = React.useState<number>(0);
+    const [minHeight, setMinHeight] = React.useState<number>(0);
     const containerRef = React.useRef<HTMLDivElement>(null);
 
     // Snapshot of the resolved Global Baseline — used only to show "inherited from global" hints
@@ -517,17 +517,17 @@ export default function App() {
     const fqdnGenerated = buildFqdnRegex();
     const fqdnIsError = fqdnGenerated.startsWith("(");
 
-    // Lock the container to the tallest rendered height — prevents the ADO iframe
-    // from shrinking when sections are collapsed.
-    React.useLayoutEffect(() => {
-        if (containerRef.current) {
+    // Snap the container height once the hub has fully loaded so the ADO iframe
+    // never shrinks when sections are collapsed. Fires only when status changes to Ready.
+    React.useEffect(() => {
+        if (/^Ready/i.test(status) && containerRef.current) {
             const h = containerRef.current.scrollHeight;
-            if (h > lockedMinHeight) setLockedMinHeight(h);
+            setMinHeight(prev => Math.max(prev, h));
         }
-    });
+    }, [status]);
 
     return (
-        <div ref={containerRef} style={{ fontFamily: T.font, maxWidth: "920px", padding: "32px 36px 40px", background: T.surface0, color: T.surface900, minHeight: lockedMinHeight > 0 ? lockedMinHeight : undefined }}>
+        <div ref={containerRef} style={{ fontFamily: T.font, maxWidth: "920px", padding: "32px 36px 40px", background: T.surface0, color: T.surface900, minHeight: minHeight > 0 ? minHeight : undefined }}>
 
             {/* Header */}
             <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 20 }}>
