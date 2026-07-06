@@ -188,8 +188,6 @@ export default function App() {
     const [projects, setProjects] = React.useState<TeamProjectReference[]>([]);
     const [selectedProjectId, setSelectedProjectId] = React.useState<string>("");
     const [collapsed, setCollapsed] = React.useState<Record<string, boolean>>({});
-    const [minHeight, setMinHeight] = React.useState<number>(0);
-    const containerRef = React.useRef<HTMLDivElement>(null);
 
     // Snapshot of the resolved Global Baseline — used only to show "inherited from global" hints
     // while editing Project Overrides. Never sent back on save.
@@ -251,6 +249,12 @@ export default function App() {
             }
         };
         initHub();
+    }, []);
+
+    // Lock document.body height so the ADO extension iframe never shrinks
+    // when sections are collapsed. 2900px covers all sections fully expanded.
+    React.useEffect(() => {
+        document.body.style.minHeight = "2900px";
     }, []);
 
     const applyDefaults = (d: Defaults) => {
@@ -517,17 +521,8 @@ export default function App() {
     const fqdnGenerated = buildFqdnRegex();
     const fqdnIsError = fqdnGenerated.startsWith("(");
 
-    // Snap the container height once the hub has fully loaded so the ADO iframe
-    // never shrinks when sections are collapsed. Fires only when status changes to Ready.
-    React.useEffect(() => {
-        if (/^Ready/i.test(status) && containerRef.current) {
-            const h = containerRef.current.scrollHeight;
-            setMinHeight(prev => Math.max(prev, h));
-        }
-    }, [status]);
-
     return (
-        <div ref={containerRef} style={{ fontFamily: T.font, maxWidth: "920px", padding: "32px 36px 40px", background: T.surface0, color: T.surface900, minHeight: minHeight > 0 ? minHeight : undefined }}>
+        <div style={{ fontFamily: T.font, maxWidth: "920px", padding: "32px 36px 40px", background: T.surface0, color: T.surface900 }}>
 
             {/* Header */}
             <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 20 }}>
