@@ -223,6 +223,12 @@ export default function App() {
     const [profileId, setProfileId] = React.useState<string>(GLOBAL_DEFAULTS.profileId);
     const [incrementalMode, setIncrementalMode] = React.useState<string>(GLOBAL_DEFAULTS.incrementalMode);
 
+    // FQDN to RegEx builder state (local UI only, never persisted)
+    const [fqdnSample, setFqdnSample] = React.useState<string>("");
+    const [fqdnWildcardSub, setFqdnWildcardSub] = React.useState<boolean>(true);
+    const [fqdnAllowHttp, setFqdnAllowHttp] = React.useState<boolean>(false);
+    const [fqdnIncludePath, setFqdnIncludePath] = React.useState<boolean>(false);
+
     const [etag, setEtag] = React.useState<number | undefined>(undefined);
 
     React.useEffect(() => {
@@ -455,6 +461,38 @@ export default function App() {
         return parts.length > 0 ? parts.join(" | ") : "(no components selected)";
     };
 
+
+    // Converts a sample URL to an escaped regex string (stored value, fed to new RegExp() in index.js).
+    const buildFqdnRegex = (): string => {
+        if (!fqdnSample.trim()) return "";
+        let input = fqdnSample.trim();
+        try {
+            if (!/^https?:\/\//i.test(input)) input = "https://" + input;
+            const parsed = new URL(input);
+            const proto = fqdnAllowHttp ? "https?" : parsed.protocol.replace(":", "");
+            const hostname = parsed.hostname;
+            const parts = hostname.split(".");
+            let hostPart: string;
+            if (fqdnWildcardSub && parts.length > 2) {
+                const base = parts.slice(-2).map(p => p.replace(/\./g, "\\.")).join("\\.");
+                hostPart = `.*\\.${base}`;
+            } else if (fqdnWildcardSub && parts.length === 2) {
+                const escaped = parts.map(p => p.replace(/\./g, "\\.")).join("\\.");
+                hostPart = `(.*\\.)?${escaped}`;
+            } else {
+                hostPart = hostname.replace(/\./g, "\\.");
+            }
+            const portPart = parsed.port ? `\\:${parsed.port}` : "";
+            let pathPart = "";
+            if (fqdnIncludePath && parsed.pathname && parsed.pathname !== "/") {
+                pathPart = parsed.pathname.replace(/\//g, "\\/");
+            }
+            return `^${proto}:\\/\\/${hostPart}${portPart}${pathPart}`;
+        } catch {
+            return "(invalid URL)";
+        }
+    };
+
     const toggleSection = (key: SectionKey) => setCollapsed(prev => ({ ...prev, [key]: !prev[key] }));
     const allCollapsed = SECTION_ORDER.every(k => collapsed[k]);
     const toggleAllSections = () => {
@@ -473,6 +511,9 @@ export default function App() {
         background: statusIsError ? T.red100 : statusIsSuccess ? T.green100 : T.blue100,
         color: statusIsError ? T.red900 : statusIsSuccess ? T.green900 : T.blue900,
     };
+
+    const fqdnGenerated = buildFqdnRegex();
+    const fqdnIsError = fqdnGenerated.startsWith("(");
 
     return (
         <div style={{ fontFamily: T.font, maxWidth: "920px", padding: "32px 36px 40px", background: T.surface0, color: T.surface900 }}>
@@ -603,6 +644,73 @@ export default function App() {
                                 <TextField label="Allowed domain scope (RegEx)" value={allowedDomainRegex} setter={setAllowedDomainRegex}
                                            placeholder="^https:\/\/.*\.staging\.company\.com"
                                            desc="Prevents scanning of unauthorized or production endpoints." hint={globalSnapshot.allowedDomainRegex} isProjectTabActive={isProjectTabActive} />
+
+                                {/* ── RegEx builder helper ── */}
+                                <div style={{ padding: "14px 20px", borderBottom: `1px solid ${T.surface200}`, background: T.surface50 }}>
+                                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                                        <span style={{ fontSize: 11, fontWeight: 700, color: T.accent800, textTransform: "uppercase", letterSpacing: "0.06em", background: T.accent100, padding: "2px 8px", borderRadius: 9999 }}>RegEx builder</span>
+                                        <span style={{ fontSize: 12, color: T.surface600 }}>Type a sample URL — we generate the pattern for you</span>
+                                    </div>
+                                    <div style={{ marginBottom: 10 }}>
+                                        <input
+                                            value={fqdnSample}
+                                            onChange={e => setFqdnSample(e.target.value)}
+                                            placeholder="https://staging.testinvicti.com"
+                                            style={{
+                                                width: "100%", boxSizing: "border-box", padding: "7px 12px",
+                                                border: `1px solid ${T.surface400}`, borderRadius: 6,
+                                                fontFamily: T.font, fontSize: 13, color: T.surface900, background: T.surface0,
+                                            }}
+                                        />
+                                    </div>
+                                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
+                                        {[
+                                            { key: "sub",  label: "Wildcard subdomains", tip: "staging.company.com -> .*\.company\.com", val: fqdnWildcardSub,  set: setFqdnWildcardSub  },
+                                            { key: "http", label: "Allow HTTP too",       tip: "https -> https?",                           val: fqdnAllowHttp,    set: setFqdnAllowHttp    },
+                                            { key: "path", label: "Include path",         tip: "Locks pattern to the exact URL path",       val: fqdnIncludePath,  set: setFqdnIncludePath  },
+                                        ].map(opt => (
+                                            <button key={opt.key} title={opt.tip} onClick={() => opt.set(!opt.val)} style={{
+                                                border: 0, cursor: "pointer", fontFamily: T.font, fontSize: 12, fontWeight: 600,
+                                                padding: "4px 12px", borderRadius: 9999,
+                                                background: opt.val ? T.accent100 : T.surface200,
+                                                color:      opt.val ? T.accent800 : T.surface600,
+                                            }}>
+                                                {opt.val ? "✓" : "○"} {opt.label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                    {fqdnSample.trim() ? (
+                                        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                                            <code style={{
+                                                flex: 1, display: "block", padding: "8px 12px",
+                                                background: fqdnIsError ? T.red100 : T.surface0,
+                                                border: `1px solid ${fqdnIsError ? T.red900 : T.surface400}`,
+                                                borderRadius: 6, fontFamily: "monospace", fontSize: 13,
+                                                color: fqdnIsError ? T.red900 : T.surface900,
+                                                wordBreak: "break-all", lineHeight: 1.5,
+                                            }}>
+                                                {fqdnGenerated}
+                                            </code>
+                                            {!fqdnIsError && (
+                                                <button
+                                                    onClick={() => setAllowedDomainRegex(fqdnGenerated)}
+                                                    style={{
+                                                        flexShrink: 0, border: 0, cursor: "pointer", fontFamily: T.font,
+                                                        fontSize: 13, fontWeight: 600, padding: "8px 16px", borderRadius: 6,
+                                                        background: T.accent800, color: "#fff", whiteSpace: "nowrap",
+                                                    }}
+                                                >
+                                                    Apply
+                                                </button>
+                                            )}
+                                        </div>
+                                    ) : (
+                                        <p style={{ margin: 0, fontSize: 12, color: T.surface500, fontStyle: "italic" }}>
+                                            Enter a sample URL above to preview the generated regex.
+                                        </p>
+                                    )}
+                                </div>
+
                                 <SelectField label="Mandatory authentication" value={requireAuth} setter={setRequireAuth}
                                              options={[{ val: "true", lbl: "Enabled — block unauthenticated scans" }, { val: "false", lbl: "Disabled — allow unauthenticated scans" }]}
                                              desc="Breaks the build if devs fail to supply auth config." isProjectTabActive={isProjectTabActive} />
@@ -623,11 +731,11 @@ export default function App() {
                                              desc="Hardlocks execution speed; prevents dev throttling bypass." isProjectTabActive={isProjectTabActive} />
                                 <TextField label="Scan profile ID" value={profileId} setter={setProfileId}
                                            placeholder="11111111-1111-1111-1111-111111111111"
-                                           desc="Invicti scan profile UUID. Defaults to Full Scan (all-ones UUID). Copy the profile ID from your Invicti platform under Scans → Profiles."
+                                           desc="Invicti scan profile UUID. Defaults to Full Scan (all-ones UUID). Copy the profile ID from Invicti under Scans > Profiles."
                                            hint={globalSnapshot.profileId} isProjectTabActive={isProjectTabActive} />
                                 <SelectField label="Incremental scan mode" value={incrementalMode} setter={setIncrementalMode}
                                              options={[{ val: "true", lbl: "Enabled — scan only changed areas" }, { val: "false", lbl: "Disabled — full scan every time" }]}
-                                             desc="When enabled, Invicti re-tests only areas that changed since the last scan. Faster pipelines, but requires a prior scan baseline to exist for the target." isProjectTabActive={isProjectTabActive} />
+                                             desc="When enabled, Invicti re-tests only areas that changed since the last scan. Requires a prior scan baseline." isProjectTabActive={isProjectTabActive} />
                                 <TextField label="Critical ceiling" value={criticalThreshold} setter={clampedSetCritical} placeholder="1" type="number" min={0} hint={globalSnapshot.criticalThreshold} isProjectTabActive={isProjectTabActive} />
                                 <TextField label="High ceiling" value={highThreshold} setter={clampedSetHigh} placeholder="3" type="number" min={0} hint={globalSnapshot.highThreshold} isProjectTabActive={isProjectTabActive} />
                                 <TextField label="Medium ceiling" value={mediumThreshold} setter={clampedSetMedium} placeholder="5" type="number" min={0} hint={globalSnapshot.mediumThreshold} isProjectTabActive={isProjectTabActive} />
