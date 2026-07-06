@@ -188,6 +188,8 @@ export default function App() {
     const [projects, setProjects] = React.useState<TeamProjectReference[]>([]);
     const [selectedProjectId, setSelectedProjectId] = React.useState<string>("");
     const [collapsed, setCollapsed] = React.useState<Record<string, boolean>>({});
+    const [lockedMinHeight, setLockedMinHeight] = React.useState<number>(0);
+    const containerRef = React.useRef<HTMLDivElement>(null);
 
     // Snapshot of the resolved Global Baseline — used only to show "inherited from global" hints
     // while editing Project Overrides. Never sent back on save.
@@ -515,8 +517,17 @@ export default function App() {
     const fqdnGenerated = buildFqdnRegex();
     const fqdnIsError = fqdnGenerated.startsWith("(");
 
+    // Lock the container to the tallest rendered height — prevents the ADO iframe
+    // from shrinking when sections are collapsed.
+    React.useLayoutEffect(() => {
+        if (containerRef.current) {
+            const h = containerRef.current.scrollHeight;
+            if (h > lockedMinHeight) setLockedMinHeight(h);
+        }
+    });
+
     return (
-        <div style={{ fontFamily: T.font, maxWidth: "920px", padding: "32px 36px 40px", background: T.surface0, color: T.surface900 }}>
+        <div ref={containerRef} style={{ fontFamily: T.font, maxWidth: "920px", padding: "32px 36px 40px", background: T.surface0, color: T.surface900, minHeight: lockedMinHeight > 0 ? lockedMinHeight : undefined }}>
 
             {/* Header */}
             <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 20 }}>
@@ -645,7 +656,7 @@ export default function App() {
                                            placeholder="^https:\/\/.*\.staging\.company\.com"
                                            desc="Prevents scanning of unauthorized or production endpoints." hint={globalSnapshot.allowedDomainRegex} isProjectTabActive={isProjectTabActive} />
 
-                                {/* ── RegEx builder helper ── */}
+                                {/* RegEx builder helper */}
                                 <div style={{ padding: "14px 20px", borderBottom: `1px solid ${T.surface200}`, background: T.surface50 }}>
                                     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
                                         <span style={{ fontSize: 11, fontWeight: 700, color: T.accent800, textTransform: "uppercase", letterSpacing: "0.06em", background: T.accent100, padding: "2px 8px", borderRadius: 9999 }}>RegEx builder</span>
@@ -665,9 +676,9 @@ export default function App() {
                                     </div>
                                     <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
                                         {[
-                                            { key: "sub",  label: "Wildcard subdomains", tip: "staging.company.com -> .*\.company\.com", val: fqdnWildcardSub,  set: setFqdnWildcardSub  },
-                                            { key: "http", label: "Allow HTTP too",       tip: "https -> https?",                           val: fqdnAllowHttp,    set: setFqdnAllowHttp    },
-                                            { key: "path", label: "Include path",         tip: "Locks pattern to the exact URL path",       val: fqdnIncludePath,  set: setFqdnIncludePath  },
+                                            { key: "sub",  label: "Wildcard subdomains", tip: "staging.company.com -> .*\\.company\\.com", val: fqdnWildcardSub,  set: setFqdnWildcardSub  },
+                                            { key: "http", label: "Allow HTTP too",       tip: "https -> https?",                              val: fqdnAllowHttp,    set: setFqdnAllowHttp    },
+                                            { key: "path", label: "Include path",         tip: "Locks pattern to the exact URL path",          val: fqdnIncludePath,  set: setFqdnIncludePath  },
                                         ].map(opt => (
                                             <button key={opt.key} title={opt.tip} onClick={() => opt.set(!opt.val)} style={{
                                                 border: 0, cursor: "pointer", fontFamily: T.font, fontSize: 12, fontWeight: 600,
