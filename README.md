@@ -78,6 +78,30 @@ authentication:
 type: "bearer"
 bearer_token: "$(API_BEARER_TOKEN)"
 
+### Managed Identity Authentication (no stored credentials)
+
+Use `managed_identity` when the target is protected by Microsoft Entra ID and your organization forbids app-registration secrets. The ADO agent requests an Entra ID token from the Azure Instance Metadata Service (IMDS) and Module B sets it as the target's `Authorization: Bearer` header.
+
+target:
+name: "Payment API"
+url: "https://payment.staging.company.com"
+type: "api"
+api_spec_file: "src/api/openapi.json"
+
+authentication:
+type: "managed_identity"
+managed_identity:
+resource: "api://payment-staging"
+client_id: "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+
+Requirements and limits:
+
+* The pipeline must run on a self-hosted agent on an Azure VM/VMSS (or other IMDS-enabled host) with a system- or user-assigned managed identity. Microsoft-hosted agents have no IMDS identity.
+* The target application must validate Entra ID tokens for the given `resource` audience, and the managed identity's service principal must be authorized in it (for example an app role assignment).
+* `client_id` is optional; omit it for the system-assigned identity. Admins can enforce a specific identity in the Admin Hub.
+* The token is injected once and is not refreshed. If `max_scan_time` exceeds the token lifetime the build fails (or warns, per Admin Hub); with no `max_scan_time` a warning is logged and Module C warns if the token expires mid-scan.
+* Admin Hub section "Managed Identity Authentication" controls: allow/block, allowed resource RegEx, enforced client ID, and fail-on-short-token.
+
 ### Supported Authentication Types
 
 | Type | Required Fields |
@@ -87,6 +111,7 @@ bearer_token: "$(API_BEARER_TOKEN)"
 | token | auth_token |
 | form | authentication.login_url, username, password |
 | oauth | oauth.grant_type (client_credentials, authorization_code, or password), access_token_url, client_id, client_secret |
+| managed_identity | managed_identity.resource (optional managed_identity.client_id) |
 
 ---
 

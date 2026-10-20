@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const https = require('https');
 const url = require('url');
+const { resolveManagedIdentityConfig, acquireManagedIdentityToken, evaluateTokenCoverage, isTrue } = require('./managedIdentity');
 
 /**
  * Module B: Configures the target asset, handles spec ingestion, 
@@ -162,6 +163,31 @@ async function executeModuleB(targetId, devConfig, activePolicy) {
         console.log(`[Module B] Dynamic API Authorization 'Bearer' header assigned.`);
     }
 
+    else if (authType === "managed_identity") {
+        // Pipeline-side Managed Identity: the ADO agent pulls an Entra ID token from IMDS
+        // and the target is configured with it as an Authorization header.
+        const mi = resolveManagedIdentityConfig(devConfig, padlocks);
+        console.log(`[Module B] Acquiring Entra ID token via Managed Identity (resource: ${mi.resource}, identity: ${mi.clientId ? 'user-assigned ' + mi.clientId : 'system-assigned / default'})...`);
+        const token = await acquireManagedIdentityToken(mi);
+        const c = token.claims;
+        console.log(`[✔] Managed Identity token acquired (valid ~${Math.floor(token.expiresInSeconds / 60)} min). aud=${c.aud} oid=${c.oid} appid=${c.appid}`);
+
+        const maxScanTime = parseInt(devConfig["target.max_scan_time"] || '0', 10);
+        const coverage = evaluateTokenCoverage(token, maxScanTime);
+        if (coverage) {
+            const failOnShort = padlocks.managed_identity_fail_on_short_token === undefined || isTrue(padlocks.managed_identity_fail_on_short_token);
+            if (!coverage.unbounded && failOnShort) {
+                const errorMsg = `SECURITY GATE BREACHED: ${coverage.message}`;
+                console.error(`##vso[task.logissue type=error;]${errorMsg}`);
+                throw new Error(errorMsg);
+            }
+            console.warn(`##vso[task.logissue type=warning;]${coverage.message}`);
+        }
+
+        process.env['DAST_MI_TOKEN_EXPIRES_AT'] = String(token.expiresAtMs);
+        customHeadersArray.push({ name: "Authorization", value: `Bearer ${token.accessToken}` });
+        console.log(`[Module B] Managed Identity 'Bearer' header assigned to target configuration.`);
+    }
     // Assemble Native PATCH Payload Structure matching TargetConfiguration schema
     const patchPayload = {
         limit_crawler_scope: devConfig["target.limit_crawler_scope"] !== "false",

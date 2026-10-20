@@ -217,6 +217,7 @@ async function executeModuleC(targetId, devConfig, activePolicy) {
 
     // Track seen event IDs so we never log the same event twice across polls
     const seenEventIds = new Set();
+    let miExpiryWarned = false;
     let currentScanSessionId = null;
 
     while (!['completed', 'failed', 'aborted'].includes(scanStatus) && pollCount < maxPollAttempts) {
@@ -234,6 +235,12 @@ async function executeModuleC(targetId, devConfig, activePolicy) {
         const m = parseInt(counts.medium || 0, 10);
 
         console.log(`[Module C] Attempt ${pollCount}: Status=${scanStatus.toUpperCase()} | Findings -> C:${c}, H:${h}, M:${m}`);
+
+        // Managed Identity tokens are injected statically; warn once if the scan outlives the token.
+        if (!miExpiryWarned && process.env['DAST_MI_TOKEN_EXPIRES_AT'] && Date.now() > parseInt(process.env['DAST_MI_TOKEN_EXPIRES_AT'], 10)) {
+            miExpiryWarned = true;
+            console.warn(`##vso[task.logissue type=warning;]The Managed Identity token injected into the target has expired mid-scan. Authenticated coverage after this point is not guaranteed.`);
+        }
 
         // Capture scan_session_id as soon as it becomes available
         if (session.scan_session_id && session.scan_session_id !== currentScanSessionId) {

@@ -50,6 +50,7 @@ type Defaults = {
     complianceFrameworks: string[];
     targetNameOverride: string; targetNamePrefix: string; targetNameIncludeProject: string; targetNameIncludeUser: string; targetNameIncludeDevName: string;
     profileId: string; incrementalMode: string;
+    miEnabled: string; miAllowedResourceRegex: string; miClientId: string; miFailOnShortToken: string;
 };
 
 const GLOBAL_DEFAULTS: Defaults = {
@@ -62,6 +63,7 @@ const GLOBAL_DEFAULTS: Defaults = {
     complianceFrameworks: [],
     targetNameOverride: "false", targetNamePrefix: "", targetNameIncludeProject: "true", targetNameIncludeUser: "false", targetNameIncludeDevName: "true",
     profileId: "11111111-1111-1111-1111-111111111111", incrementalMode: "false",
+    miEnabled: "true", miAllowedResourceRegex: "", miClientId: "", miFailOnShortToken: "true",
 };
 
 const PROJECT_DEFAULTS: Defaults = {
@@ -73,10 +75,11 @@ const PROJECT_DEFAULTS: Defaults = {
     complianceFrameworks: [],
     targetNameOverride: "", targetNamePrefix: "", targetNameIncludeProject: "", targetNameIncludeUser: "", targetNameIncludeDevName: "",
     profileId: "", incrementalMode: "",
+    miEnabled: "", miAllowedResourceRegex: "", miClientId: "", miFailOnShortToken: "",
 };
 
-type SectionKey = "connection" | "trigger" | "guardrails" | "thresholds" | "tagging" | "compliance";
-const SECTION_ORDER: SectionKey[] = ["connection", "trigger", "guardrails", "thresholds", "tagging", "compliance"];
+type SectionKey = "connection" | "trigger" | "guardrails" | "thresholds" | "tagging" | "managedIdentity" | "compliance";
+const SECTION_ORDER: SectionKey[] = ["connection", "trigger", "guardrails", "thresholds", "tagging", "managedIdentity", "compliance"];
 
 type FieldState = "normal" | "inherited" | "overridden";
 const fieldStateOf = (isProjectTabActive: boolean, value: string): FieldState => {
@@ -222,6 +225,10 @@ export default function App() {
     const [targetNameIncludeDevName, setTargetNameIncludeDevName] = React.useState<string>(GLOBAL_DEFAULTS.targetNameIncludeDevName);
     const [profileId, setProfileId] = React.useState<string>(GLOBAL_DEFAULTS.profileId);
     const [incrementalMode, setIncrementalMode] = React.useState<string>(GLOBAL_DEFAULTS.incrementalMode);
+    const [miEnabled, setMiEnabled] = React.useState<string>(GLOBAL_DEFAULTS.miEnabled);
+    const [miAllowedResourceRegex, setMiAllowedResourceRegex] = React.useState<string>(GLOBAL_DEFAULTS.miAllowedResourceRegex);
+    const [miClientId, setMiClientId] = React.useState<string>(GLOBAL_DEFAULTS.miClientId);
+    const [miFailOnShortToken, setMiFailOnShortToken] = React.useState<string>(GLOBAL_DEFAULTS.miFailOnShortToken);
 
     // FQDN to RegEx builder state (local UI only, never persisted)
     const [fqdnSample, setFqdnSample] = React.useState<string>("");
@@ -269,6 +276,7 @@ export default function App() {
         setTargetNameOverride(d.targetNameOverride); setTargetNamePrefix(d.targetNamePrefix);
         setTargetNameIncludeProject(d.targetNameIncludeProject); setTargetNameIncludeUser(d.targetNameIncludeUser); setTargetNameIncludeDevName(d.targetNameIncludeDevName);
         setProfileId(d.profileId); setIncrementalMode(d.incrementalMode);
+        setMiEnabled(d.miEnabled); setMiAllowedResourceRegex(d.miAllowedResourceRegex); setMiClientId(d.miClientId); setMiFailOnShortToken(d.miFailOnShortToken);
         setEtag(undefined);
     };
 
@@ -320,6 +328,10 @@ export default function App() {
                         if (doc.padlocks.target_name_include_dev_name !== undefined) { setTargetNameIncludeDevName(doc.padlocks.target_name_include_dev_name); resolved.targetNameIncludeDevName = doc.padlocks.target_name_include_dev_name; }
                         if (doc.padlocks.profile_id !== undefined) { setProfileId(doc.padlocks.profile_id); resolved.profileId = doc.padlocks.profile_id; }
                         if (doc.padlocks.incremental_mode !== undefined) { setIncrementalMode(doc.padlocks.incremental_mode); resolved.incrementalMode = doc.padlocks.incremental_mode; }
+                        if (doc.padlocks.managed_identity_enabled !== undefined) { setMiEnabled(doc.padlocks.managed_identity_enabled); resolved.miEnabled = doc.padlocks.managed_identity_enabled; }
+                        if (doc.padlocks.managed_identity_allowed_resource_regex !== undefined) { setMiAllowedResourceRegex(doc.padlocks.managed_identity_allowed_resource_regex); resolved.miAllowedResourceRegex = doc.padlocks.managed_identity_allowed_resource_regex; }
+                        if (doc.padlocks.managed_identity_client_id !== undefined) { setMiClientId(doc.padlocks.managed_identity_client_id); resolved.miClientId = doc.padlocks.managed_identity_client_id; }
+                        if (doc.padlocks.managed_identity_fail_on_short_token !== undefined) { setMiFailOnShortToken(doc.padlocks.managed_identity_fail_on_short_token); resolved.miFailOnShortToken = doc.padlocks.managed_identity_fail_on_short_token; }
                     }
 
                     if (doc.injection_constraints) {
@@ -422,7 +434,11 @@ export default function App() {
                     target_name_include_user: targetNameIncludeUser,
                     target_name_include_dev_name: targetNameIncludeDevName,
                     profile_id: profileId,
-                    incremental_mode: incrementalMode
+                    incremental_mode: incrementalMode,
+                    managed_identity_enabled: miEnabled,
+                    managed_identity_allowed_resource_regex: miAllowedResourceRegex,
+                    managed_identity_client_id: miClientId,
+                    managed_identity_fail_on_short_token: miFailOnShortToken
                 })
             };
 
@@ -813,6 +829,29 @@ export default function App() {
                                         </div>
                                     </div>
                                 )}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Managed Identity */}
+                    <div style={{ marginBottom: 28 }}>
+                        <SectionHeader title="Managed Identity Authentication" collapsed={!!collapsed.managedIdentity} onToggle={() => toggleSection("managedIdentity")} />
+                        {!collapsed.managedIdentity && (
+                            <div style={{ border: `1px solid ${T.surface200}`, borderRadius: 8, overflow: "hidden" }}>
+                                <SelectField label="Allow Managed Identity auth" value={miEnabled} setter={setMiEnabled}
+                                             options={[{ val: "true", lbl: "Allowed" }, { val: "false", lbl: "Blocked — fail builds that request it" }]}
+                                             desc="Lets .dast-config.yml use authentication type 'managed_identity'. The ADO agent must be self-hosted on an Azure VM/VMSS with a managed identity." isProjectTabActive={isProjectTabActive} />
+                                <TextField label="Allowed resource scope (RegEx)" value={miAllowedResourceRegex} setter={setMiAllowedResourceRegex}
+                                           placeholder="^api:\/\/.*-staging$"
+                                           desc="Restricts which Entra ID audiences (Application ID URIs) developers may request tokens for. Empty = any."
+                                           isProjectTabActive={isProjectTabActive} />
+                                <TextField label="Enforced identity client ID" value={miClientId} setter={setMiClientId}
+                                           placeholder="00000000-0000-0000-0000-000000000000"
+                                           desc="Forces a specific user-assigned managed identity for every scan, overriding the developer's choice. Empty = developer choice or system-assigned."
+                                           isProjectTabActive={isProjectTabActive} />
+                                <SelectField label="Fail when token is shorter than scan" value={miFailOnShortToken} setter={setMiFailOnShortToken}
+                                             options={[{ val: "true", lbl: "Enabled — break pipeline" }, { val: "false", lbl: "Disabled — warn only" }]}
+                                             desc="The token is injected once and not refreshed. Applies when max_scan_time exceeds the token lifetime." isProjectTabActive={isProjectTabActive} />
                             </div>
                         )}
                     </div>

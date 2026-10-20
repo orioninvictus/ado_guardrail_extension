@@ -1,7 +1,7 @@
 {
     "manifestVersion": 1,
     "id": "enterprise-secure-by-default-dast",
-    "version": "2.2.1",
+    "version": "2.3.0",
     "name": "Enterprise Automated DAST Engine",
     "description": "Automated 'Secure-by-Default' DAST Target Provisioning and Scanning Orchestration Engine.",
     "publisher": "ercumentekim",

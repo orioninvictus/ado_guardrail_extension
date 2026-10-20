@@ -1,5 +1,6 @@
 const https = require('https');
 const url = require('url');
+const { resolveManagedIdentityConfig } = require('./managedIdentity');
 
 /**
  * Module A: Asset Inventory & Guardrail Gatekeeper
@@ -107,6 +108,20 @@ function executeModuleA(devConfig, activePolicy) {
         // =====================================================================
         // 🏷️ AUTOMATED ORGANIZATIONAL TAGGING
         // =====================================================================
+        // =====================================================================
+        // 🛡️ GUARDRAIL 3: MANAGED IDENTITY POLICY (fail early, before asset registration)
+        // =====================================================================
+        if (String(devConfig["target.authentication.type"] || "").toLowerCase() === "managed_identity") {
+            console.log(`[Module A] Validating Managed Identity declaration against corporate policy...`);
+            try {
+                const mi = resolveManagedIdentityConfig(devConfig, padlocks);
+                console.log(`[✔] Managed Identity policy validated (resource: ${mi.resource}).`);
+            } catch (miErr) {
+                console.error(`##vso[task.logissue type=error;]${miErr.message}`);
+                return reject(miErr);
+            }
+        }
+
         console.log(`[Module A] Resolving Azure DevOps telemetry tags...`);
         let generatedTags = [];
 
